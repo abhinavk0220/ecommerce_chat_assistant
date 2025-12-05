@@ -1,15 +1,16 @@
-# # backend/guardrails.py
+# backend/guardrails.py
 
 """
 Guardrails module.
 
-We apply lightweight, rule-based guardrails *before* calling the main
+We apply rule-based guardrails *before* calling the main
 assistant logic. This helps us:
 
 1. Block obviously unsafe or inappropriate queries (safety guardrail).
-2. Optionally restrict to ecommerce topics (domain guardrail).
-   - Currently, the domain guardrail is SOFT: we do not block, we just allow.
-     This avoids accidentally blocking valid short queries like product names.
+2. Block romantic / dating / sexual / pickup-line style queries that are not
+   appropriate for a professional ecommerce assistant.
+3. Optionally restrict to ecommerce topics (domain guardrail), but still allow
+   basic chitchat (hi/hello/how are you).
 
 This module is intentionally simple and transparent so that it is easy
 to explain and debug in the project report or viva.
@@ -25,7 +26,7 @@ from typing import Optional
 class GuardrailResult:
     allowed: bool
     message: Optional[str] = None
-    reason: Optional[str] = None  # e.g., "out_of_domain", "safety", "empty"
+    reason: Optional[str] = None  # e.g., "out_of_domain", "safety", "empty", "inappropriate"
 
 
 # Very lightweight word-based checks. This is NOT a full safety system,
@@ -40,8 +41,42 @@ BLOCKED_KEYWORDS = [
     "weapon",
 ]
 
+# Additional keywords for romantic / dating / sexual requests.
+DATING_KEYWORDS = [
+    "date a girl",
+    "date a boy",
+    "date someone",
+    "dating advice",
+    "pick up line",
+    "pickup line",
+    "pick-up line",
+    "flirt with",
+    "flirting with",
+    "crush on",
+    "get a girlfriend",
+    "get a boyfriend",
+    "romantic advice",
+    "seduce",
+]
+
+SEXUAL_KEYWORDS = [
+    "sex",
+    "sexual",
+    "nsfw",
+    "naughty",
+    "hot girl",
+    "hot boy",
+    "horny",
+]
+
+ROMANTIC_PHRASES = [
+    "in love with my laptop",
+    "in love with her",
+    "in love with him",
+    "nights are going great",
+]
+
 # Keywords indicating the query is ecommerce-related.
-# (We keep this list in case we want a stricter domain guardrail later.)
 ECOMMERCE_KEYWORDS = [
     "order",
     "refund",
@@ -63,7 +98,52 @@ ECOMMERCE_KEYWORDS = [
     "device",
     "support",
     "policy",
+    "store",
+    "company",
+    "status",
 ]
+
+# Basic chitchat we want to ALLOW (router will handle it later).
+CHITCHAT_KEYWORDS = [
+    "hi",
+    "hello",
+    "hey",
+    "how are you",
+    "how r you",
+    "good morning",
+    "good evening",
+    "thank you",
+    "thanks",
+]
+
+
+def _contains_inappropriate_content(text: str) -> bool:
+    lowered = text.lower()
+    if any(kw in lowered for kw in DATING_KEYWORDS):
+        return True
+    if any(kw in lowered for kw in SEXUAL_KEYWORDS):
+        return True
+    if any(phrase in lowered for phrase in ROMANTIC_PHRASES):
+        return True
+    return False
+
+
+def _is_clearly_out_of_domain(text: str) -> bool:
+    """
+    Very rough domain guardrail:
+
+    If the message does NOT mention any store-related concept AND also
+    does not look like generic chitchat, we treat it as out-of-domain.
+    """
+    lowered = text.lower()
+
+    if any(kw in lowered for kw in ECOMMERCE_KEYWORDS):
+        return False
+    if any(kw in lowered for kw in CHITCHAT_KEYWORDS):
+        return False
+
+    # Everything else is treated as out-of-domain for this demo.
+    return True
 
 
 def apply_guardrails(user_message: str) -> GuardrailResult:
@@ -90,7 +170,7 @@ def apply_guardrails(user_message: str) -> GuardrailResult:
             reason="empty",
         )
 
-    # 1) Basic safety guardrail
+    # 1) Basic SAFETY guardrail (self-harm, violence, etc.)
     for bad in BLOCKED_KEYWORDS:
         if bad in text:
             return GuardrailResult(
@@ -103,18 +183,30 @@ def apply_guardrails(user_message: str) -> GuardrailResult:
                 reason="safety",
             )
 
-    # 2) Domain guardrail (SOFT)
-    #
-    # Earlier we used this to hard-block non-ecommerce topics. That caused
-    # valid queries like 'tell me about "ThinkPro 15"' to be blocked.
-    #
-    # For now, we keep it soft:
-    # - If no ecommerce keyword is found, we STILL allow the query.
-    # - The router + tools/RAG will handle it.
-    # - Our documents and tools are already ecommerce-focused, so the model
-    #   won't magically talk about unrelated domains.
-    if not any(kw in text for kw in ECOMMERCE_KEYWORDS):
-        return GuardrailResult(allowed=True, message=None, reason=None)
+    # 2) INAPPROPRIATE content (dating, sexual, pickup lines, etc.)
+    if _contains_inappropriate_content(text):
+        return GuardrailResult(
+            allowed=False,
+            message=(
+                "I’m here to help with your orders, products, returns, refunds, "
+                "warranty, shipping, and basic troubleshooting. "
+                "I can’t assist with romantic, sexual, or personal dating requests. "
+                "Please keep your questions related to the store and support topics."
+            ),
+            reason="inappropriate",
+        )
 
-    # Passed all checks
+    # 3) Domain guardrail: clearly out-of-domain (e.g., hacking tutorials, random life advice)
+    if _is_clearly_out_of_domain(text):
+        return GuardrailResult(
+            allowed=False,
+            message=(
+                "I’m designed to assist with our online store: orders, returns, "
+                "refunds, shipping, warranty, product suggestions, and troubleshooting "
+                "device issues. Please ask a question related to these topics."
+            ),
+            reason="out_of_domain",
+        )
+
+    # 4) Passed all checks → allowed to proceed to router + tools/RAG/LLM.
     return GuardrailResult(allowed=True)

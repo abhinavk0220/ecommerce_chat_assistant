@@ -392,12 +392,15 @@ The user asked:
 - If the question is about the store (company, what we sell, what we do), answer in general terms:
   say that we are an online electronics store focusing on laptops and headphones.
 - If it is a general small question, you can answer normally.
+- If the user asks for dating advice, pickup lines, romantic or sexual content,
+  politely refuse and explain that you are only designed for professional support queries.
 - Do NOT invent specific facts about real customers, real payments, or real companies.
 - Do NOT talk about specific real brands unless they were mentioned by the user or are part of the known catalog.
 - Today’s date is {today}.
 
 Answer briefly and clearly.
 """
+
             try:
                 resp = llm.generate_content(fallback_prompt)
                 answer_text = getattr(resp, "text", str(resp))
