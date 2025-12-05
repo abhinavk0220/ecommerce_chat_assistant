@@ -1,0 +1,41 @@
+[
+  {
+    "order_id": "ORD1001",
+    "user_id": "U001",
+    "items": [
+      {
+        "product_id": "LAP123",
+        "quantity": 1
+      }
+    ],
+    "order_date": "2025-11-20",
+    "delivery_date": "2025-11-25",
+    "status": "delivered"
+  },
+  {
+    "order_id": "ORD1002",
+    "user_id": "U001",
+    "items": [
+      {
+        "product_id": "HPH001",
+        "quantity": 1
+      }
+    ],
+    "order_date": "2025-11-28",
+    "delivery_date": "2025-12-03",
+    "status": "shipped"
+  },
+  {
+    "order_id": "ORD1003",
+    "user_id": "U002",
+    "items": [
+      {
+        "product_id": "LAP123",
+        "quantity": 1
+      }
+    ],
+    "order_date": "2025-12-01",
+    "delivery_date": null,
+    "status": "processing"
+  }
+]

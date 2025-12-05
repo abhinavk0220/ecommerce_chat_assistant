@@ -1,0 +1,652 @@
+🧠 Technical Insight (for viva)
+
+============================================1=================================================================
+
+We created a provider-agnostic LLM adapter, so the rest of the system (RAG, tools, UI) doesn’t need to know which LLM we’re using. For development we use Gemini (strong reasoning, great UX, easy deployment). In future, switching to a local model like Ollama is a 1-line change thanks to this abstraction.
+
+.env ensures security, prevents key leaks, and is the standard for environment-specific settings.
+
+===========================================2=======================================================================
+
+🔍 Why all-MiniLM-L6-v2?
+
+We’re choosing Sentence Transformers – all-MiniLM-L6-v2 because:
+
+It’s small & fast → great for local dev + many docs.
+
+It gives strong semantic similarity for RAG.
+
+Works fully offline once downloaded.
+
+Very popular & well-tested in production-style RAG systems.
+
+You can say in viva:
+
+“We used a dedicated embedding model (MiniLM) instead of the main LLM. 
+The LLM handles reasoning and answer generation, 
+while MiniLM is optimized for semantic similarity search, which improves RAG retrieval quality and reduces cost and latency.”
+
+🧠 Concept Mapping (for your tracking)
+
+Concept Used: Embeddings for Vector Search
+
+Where Implemented:
+
+File: backend/rag/embeddings.py
+
+Tested in: backend/test_embeddings.py
+
+Why This Tech Stack:
+
+sentence-transformers/all-MiniLM-L6-v2 → fast, high-quality semantic embeddings
+
+langchain_community.HuggingFaceEmbeddings → integrates smoothly with ChromaDB and LangChain RAG chain
+
+How It Will Be Used Later:
+
+We will pass get_embedding_model() into our Chroma vector store builder in vectorstore.py
+
+That vector store will power our RAG retrieval (Recall@k, ROUGE eval later)
+
+======================================3=======================================
+| Concept                      | What We Implement Now                            |
+| ---------------------------- | ------------------------------------------------ |
+| **Chunking Strategy**        | How we split long docs into smaller pieces       |
+| **Document Ingestion Layer** | Loading raw data (`/data/raw`) into our pipeline |
+| **RAG Preprocessing**        | Prepares documents for embedding + vectorization |
+
+🧠 Concept Mapping for This Step
+
+Concept Used: Chunking Strategies + Document Ingestion
+
+Where Implemented:
+
+backend/rag/chunking.py
+
+Tested via backend/test_chunking.py
+
+Why This Tech Stack:
+
+RecursiveCharacterTextSplitter (LangChain) gives better semantic splitting than naive fixed-size splits.
+
+Using a central loader and splitter module keeps ingestion logic consistent for all domains.
+
+How It Connects:
+
+Next step: these chunked_docs will be embedded using MiniLM and stored into ChromaDB via vectorstore.py.
+
+__________________________________________________________________________________________________________
+
+WE HAVE DONE CHUNKING AND RECEIVED THIS OUTPUT:
+okay so this is the output,
+______________________________________________________________________________________________________
+(myEnv) C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\backend>python test_chunking.py
+C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\myEnv\Lib\site-packages\langchain_core\_api\deprecation.py:26: UserWarning: 
+Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
+  from pydantic.v1.fields import FieldInfo as FieldInfoV1
+Raw data dir: C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\data\raw
+Loaded 1 raw document(s).
+Source: C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\data\raw\sample_guide.txt
+Content preview: Welcome to the Sample Product Guide.
+
+This document explains how to use the sample product, common issues,
+and troublesh ...
+After chunking: 3 chunks.
+--- Example chunks ---
+
+Chunk 1:
+Welcome to the Sample Product Guide.
+
+This document explains how to use the sample product, common issues,
+and troubleshooting steps.
+
+Section 1: Setup
+1. Plug in the device.
+2. Press the power button.
+3. Wait until the status light turns green.
+Metadata: {'source': 'C:\\Users\\User\\Desktop\\ABHINAV KUMAR\\CAPESTONE\\ANTIGRAVITY\\RAG-Assistant-Project\\data\\raw\\sample_guide.txt'}
+
+Chunk 2:
+Section 2: Troubleshooting
+If the device does not turn on:
+- Check the power cable.
+- Ensure the outlet is working.
+- Hold the power button for 10 seconds.
+Metadata: {'source': 'C:\\Users\\User\\Desktop\\ABHINAV KUMAR\\CAPESTONE\\ANTIGRAVITY\\RAG-Assistant-Project\\data\\raw\\sample_guide.txt'}
+
+Chunk 3:
+Section 3: Warranty
+This product comes with a one-year limited warranty covering manufacturing defects.
+Please contact support with your order ID for claims.
+Metadata: {'source': 'C:\\Users\\User\\Desktop\\ABHINAV KUMAR\\CAPESTONE\\ANTIGRAVITY\\RAG-Assistant-Project\\data\\raw\\sample_guide.txt'}
+_________________________________________________________________________________________________________
+_________________________________________________________________________________________________________
+AND FOLLOWING IS THE EXPLANATION:
+
+Nicee, this is exactly what we *wanted* to see 👌
+Let’s decode the output line by line and tie it back to concepts.
+
+---
+
+## 1️⃣ The Warning (Can Ignore for Now)
+
+```text
+UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
+```
+
+* You’re on **Python 3.11**, LangChain is just warning about future 3.14.
+* Not a problem for us right now. We can safely ignore this.
+
+---
+
+## 2️⃣ Raw Data Directory + Document Loading
+
+```text
+Raw data dir: ...\RAG-Assistant-Project\data\raw
+Loaded 1 raw document(s).
+Source: ...\data\raw\sample_guide.txt
+Content preview: Welcome to the Sample Product Guide....
+```
+
+This confirms:
+
+* Our **DATA PATH logic** (`RAW_DATA_DIR`) is correct.
+* The loader successfully read **1 file**: `sample_guide.txt`.
+* `TextLoader` wrapped that file into a **LangChain `Document`**.
+* `metadata["source"]` correctly stores file path → this will later be used for **citations and traceability**.
+
+Concept-wise:
+✅ *Document ingestion* is working.
+
+---
+
+## 3️⃣ Chunking Result
+
+```text
+After chunking: 3 chunks.
+--- Example chunks ---
+```
+
+We asked:
+
+```python
+chunked_docs = split_documents(docs, chunk_size=300, chunk_overlap=60)
+```
+
+So:
+
+* The original text was **split into 3 smaller chunks**.
+* Each chunk is now its own `Document` with the **same metadata.source**.
+
+This is our **chunking strategy** in action.
+
+---
+
+## 4️⃣ Chunk 1 – Setup Section
+
+```text
+Chunk 1:
+Welcome to the Sample Product Guide.
+
+This document explains how to use the sample product, common issues,
+and troubleshooting steps.
+
+Section 1: Setup
+1. Plug in the device.
+2. Press the power button.
+3. Wait until the status light turns green.
+Metadata: {'source': '...sample_guide.txt'}
+```
+
+Observation:
+
+* It grouped:
+
+  * Intro
+  * Setup section with steps 1–3
+* Everything is **coherent**: all about general info + setup.
+
+This is good because:
+
+* If user asks:
+  “How do I set up the device?”
+  → This chunk alone is enough to answer.
+
+---
+
+## 5️⃣ Chunk 2 – Troubleshooting Section
+
+```text
+Chunk 2:
+Section 2: Troubleshooting
+If the device does not turn on:
+- Check the power cable.
+- Ensure the outlet is working.
+- Hold the power button for 10 seconds.
+Metadata: {...}
+```
+
+* Entire chunk is just **troubleshooting for “not turning on”**.
+* This is exactly what we want:
+
+  * If user asks: “My device doesn’t turn on, what do I do?”
+    → The retriever will likely return this chunk.
+
+Conceptually:
+
+* This is a **perfect candidate** for high Recall@k and a high-quality RAG response.
+
+---
+
+## 6️⃣ Chunk 3 – Warranty Section
+
+```text
+Chunk 3:
+Section 3: Warranty
+This product comes with a one-year limited warranty covering manufacturing defects.
+Please contact support with your order ID for claims.
+Metadata: {...}
+```
+
+* Entire chunk is about **warranty terms**.
+* If someone asks: “What is the warranty period?” → this is the chunk we want retrieved.
+
+So we’ve unintentionally created:
+
+* Chunk 1 → Setup
+* Chunk 2 → Troubleshooting
+* Chunk 3 → Warranty
+
+This is **ideal semantic chunking** for RAG.
+
+---
+
+## 7️⃣ Why This Output Is Good for Our RAG
+
+You just verified that:
+
+1. **Chunking isn’t random** – It preserved **logical sections**:
+
+   * Setup, Troubleshooting, Warranty.
+2. Each chunk is:
+
+   * **Short enough** → good for embedding & context window
+   * **Coherent enough** → model can answer using a single chunk
+3. Same `metadata["source"]`:
+
+   * Later we can show:
+
+     > “According to `sample_guide.txt`, Section 2: Troubleshooting…”
+
+This will help with:
+
+* Better **Retrieval quality** (higher Recall@k)
+* Cleaner **RAG answers**
+* Easier **evaluation** (we know which chunks should be retrieved for which queries)
+
+In terms of your concept list, this step covered:
+
+* ✅ Chunking strategy
+* ✅ Document ingestion
+* ✅ Metadata for traceability (important for citations + evaluation)
+
+---
+
+If you’re happy with how this looks, we’ve now validated:
+
+* LLM → works
+* Embeddings → work and are meaningful
+* Chunking → produces clean, semantically aligned chunks
+* Next: we connect everything to **Chroma + retrieval + RAG answer generation** (which we already started with `vectorstore.py`).
+
+If your `test_vectorstore.py` also ran fine, we can move to building the **RAG query function**:
+
+> `answer = rag_answer(user_query)`
+
+which:
+
+* retrieves top-k chunks from Chroma
+* passes them to Gemini with a RAG prompt
+* returns a grounded answer we can later evaluate with ROUGE etc.
+
+
+====================Step 4 — Vector Store with ChromaDB============================================================
+
+🧠 Concept Mapping for This Step
+
+Concept Used: Vector Database (ChromaDB)
+
+Where Implemented:
+
+backend/rag/vectorstore.py
+
+Tested via backend/test_vectorstore.py
+
+Why This Tech Stack:
+
+ChromaDB is:
+
+Lightweight, local, easy to embed in a project
+
+Persistent (no need for external DB service)
+
+Supports metadata and integrates well with LangChain
+
+Perfectly matches a single-node, academic RAG system where we care more about iteration and evaluation than massive scaling.
+
+How It Connects:
+
+RAG pipeline will now use get_vectorstore() to create a retriever.
+
+Our evaluation (Recall@k) will operate on this vector store.
+
+
+=====================================🧠 Step 5 — RAG Retrieval + Gemini Answer Generation================================
+🧠 Concept Mapping for This Step
+
+RAG Architecture
+
+Retrieval: Chroma .as_retriever()
+
+Augmentation: we build a prompt that inlines the retrieved chunks
+
+Generation: Gemini answers based on that context
+
+Guardrails (early version)
+
+Prompt explicitly says:
+
+“ONLY use context”
+
+“If not in context, say ‘I’m not sure…’”
+
+This is a prompt-level guardrail → later we can add output checks too.
+
+Why This Tech Stack is Good Here
+
+Using Chroma’s retriever + MiniLM embeddings gives us:
+
+fast + semantically meaningful retrieval
+
+Gemini is strong at:
+
+instruction following
+
+summarizing multiple context chunks
+
+sticking to given rules when prompted clearly
+
+You can explain:
+
+“We implemented a classic retrieval-augmented generation (RAG) pattern. The retriever uses a Chroma vector store built from 
+chunked documents and MiniLM embeddings. The LLM (Gemini) is then prompted with both the query and the retrieved context, and 
+instructed explicitly not to hallucinate outside of that context.”
+
+
+=============WHICH CHUNKING STRATEGY WE ARE USING====================================================================
+2️⃣ Which Chunking Strategy Are We Using & Why?
+
+Right now, in backend/rag/chunking.py, we’re using:
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=300,   # in test, you used 300
+    chunk_overlap=60, # small overlap for continuity
+    length_function=len,
+)
+
+
+This is called:
+
+🔹 Recursive character-based chunking with overlap
+
+How it works
+
+It tries to split text in a structured way:
+
+First by paragraph breaks
+
+Then by line breaks
+
+Then by smaller units if needed
+
+Uses character-based size:
+
+~300 characters ≈ ~60–80 words
+
+Overlap of 60 characters:
+
+Ensures that if an important sentence is at the boundary, both chunks see enough of it.
+
+In your sample_guide.txt, we saw:
+
+Chunk 1 = Intro + Setup
+
+Chunk 2 = Troubleshooting
+
+Chunk 3 = Warranty
+
+So each chunk ended up being section-level meaningful. That is ideal for ecommerce:
+
+Product manuals → setup / usage / troubleshooting sections
+
+Policy docs → return / warranty / shipping sections
+
+FAQ pages → each question+answer block becomes a chunk
+
+Why this strategy is a good fit for ecommerce RAG
+
+Ecommerce docs (policies, manuals, FAQs) are semi-structured text, not tables.
+
+We want chunks that:
+
+Are small enough to be precise (good retrieval)
+
+Are big enough to keep context (one complete idea like “return eligibility condition” or “troubleshooting step sequence”)
+
+Overlap reduces the chance of cutting an important condition in half:
+
+e.g. “Returns are allowed within 7 days only if the product is unused and in original packaging”
+
+Later, if we want to improve:
+
+For policy PDFs, we can add a section-aware splitter (based on headings like “Returns”, “Refunds”).
+
+But what we have now is a strong, reasonable default — and you already saw it behave nicely.
+
+You can explain in viva:
+
+“We use a recursive character-based text splitter with moderate overlap so that each chunk corresponds to a coherent 
+section (e.g., setup, troubleshooting, warranty). This improves retrieval quality and reduces hallucination, 
+because each chunk is self-contained and semantically meaningful for the LLM.”
+
+================================================================================================================================
+
+Let me break it down in a way you can drop straight into your documentation.
+
+1. What “agentic AI” means in our project
+
+Agentic AI = LLM + tools + memory + control flow.
+
+Instead of the LLM just answering from its own weights, it:
+
+Understands the user’s intent
+
+Decides which external tools / data sources to call
+
+Uses the tool results + RAG context
+
+Generates a final answer
+
+We’ve implemented this as:
+
+guardrails.py → safety / domain filter
+
+agent/router.py → intent classifier (policy)
+
+agent/orchestrator.py → agent brain (decides which tool/RAG/LLM path to run)
+
+tools/*.py → external tools (orders, products, returns, refunds, warranty, troubleshooting)
+
+rag/rag_chain.py + Chroma + embeddings → RAG “knowledge brain”
+
+caching layer (so repeated queries are fast and don’t re-run tools/LLM each time)
+
+That combination is an agentic system.
+
+2. Step-by-step: what happens for one query
+
+Take this example:
+
+“Can I return my laptop order ORD1001?”
+
+(a) Guardrails
+
+Before anything else, apply_guardrails() runs:
+
+Checks for unsafe content (self-harm, weapons, etc.)
+
+(Currently) soft domain checks
+If blocked → returns a safe message, no tools / RAG / LLM are called.
+
+(b) Router = policy that chooses the “route”
+
+detect_intent() in agent/router.py:
+
+Extracts:
+
+order_id = "ORD1001"
+
+category = "laptop"
+
+Matches patterns:
+
+sees “return” / “can I return” →
+intent = "return_eligibility"
+
+It returns a small state object:
+
+{
+  "intent": "return_eligibility",
+  "order_id": "ORD1001",
+  "category": "laptop",
+  "max_price": None,
+}
+
+
+This is exactly what an agent policy does.
+
+(c) Orchestrator = agent “controller”
+
+handle_user_message() in agent/orchestrator.py:
+
+Reads intent == "return_eligibility"
+
+Chooses the tool path:
+
+tool_res = check_return_eligibility_tool.invoke({
+    "order_id": order_id,
+    "today": today,
+})
+answer_text = tool_res["reason"]
+
+
+So the LLM is not guessing policy.
+The Python tool encodes the rule:
+
+Look up order → check delivery_date → compare with today → 7-day window → return JSON.
+
+(d) LLM reasoning on top (for some intents)
+
+For things like product_search, the agent does:
+
+Call search_products_tool to fetch a structured list of products.
+
+Convert that into a text “products_context”.
+
+Call Gemini with a prompt that says:
+
+“Only talk about these products”
+
+“Summarize and recommend”
+
+That’s classic tool + LLM agent pattern:
+
+Tool = source of truth
+
+LLM = explanation / ranking / recommendation layer
+
+3. Where LangGraph would fit (conceptually)
+
+If we draw our logic as a graph, we already have:
+
+Node 0: Guardrails
+
+Node 1: Router → decide which branch to go to
+
+Nodes 2–7: Tool nodes
+
+order_status tool
+
+return_eligibility tool
+
+refund tool
+
+warranty tool
+
+product_search tool
+
+troubleshooting tool (+ RAG fallback)
+
+Node 8: RAG node (answer_with_rag)
+
+Node 9: General LLM fallback node
+
+Node 10: Chitchat + date nodes
+
+LangGraph would just formalize this as a graph with edges and conditional branches.
+We’ve built the same thing in plain Python:
+
+router.py = decision edges
+
+orchestrator.py = node execution & branching
+
+You can honestly say in viva:
+
+“We implemented an agentic workflow similar to LangGraph, but explicitly in Python: the router acts as the policy that decides which tools or RAG node to run, and the orchestrator coordinates the tool calls, RAG retrieval, and LLM reasoning.”
+
+4. Where caching fits into the agent loop
+
+We added a caching layer (near handle_user_message):
+
+Key = something like (normalized_user_message, intent)
+
+Value = full response dict (answer, route, tool_result, etc.)
+
+Flow:
+
+Before running tools / RAG / LLM:
+
+Check cache
+
+If cache hit:
+
+Return the cached answer immediately (agent “remembers” this exact query)
+
+If cache miss:
+
+Run the full agent logic
+
+Store result in cache
+
+So the agent now has short-term memory for repeated queries → faster & cheaper.
+
+5. Quick 4–5 line summary you can paste into documentation
+
+We implement an agentic AI assistant by separating policy, tools, and reasoning.
+Incoming user messages first pass through guardrails, then a rule-based router that detects intent (order status, return, refund, warranty, product search, troubleshooting, policy/general question, chitchat, date).
+The orchestrator then chooses the correct branch: calling structured tools (Python functions over JSON order/product data), a RAG chain over company/policy/FAQ documents stored in Chroma, or a hybrid tool+LLM path (for product recommendations).
+The LLM (Gemini) is mainly used for reasoning and explanation on top of tool and RAG outputs, not for guessing facts.
+A simple caching layer avoids recomputing the same answers, giving the agent a lightweight memory for repeated queries.
+================================================================================================================================
+
+

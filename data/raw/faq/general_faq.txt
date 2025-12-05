@@ -1,0 +1,42 @@
+General FAQ – Antigravity Electronics
+
+Q1: What products do you sell?
+A1: We currently focus on a small catalog of electronics, mainly:
+    - Laptops for students, professionals, and business users
+    - Wireless headphones, including noise-cancelling and bass-focused models
+
+Q2: How do I track my order?
+A2: You can track your order by using your order ID in the format ORD1234.
+    For example, you can ask the assistant:
+    - “Where is my order ORD1002?”
+    - “What is the status of ORD1001?”
+    The assistant will respond with the current status and the expected or actual delivery date.
+
+Q3: What is your return policy?
+A3: We offer a 7-day return window from the date of delivery for eligible products such as laptops and headphones.
+    The product should be in good condition and may be subject to inspection.
+    For more details, see the Return Policy document.
+
+Q4: How long is the warranty on products?
+A4: In this demo:
+    - Laptops: typically 1-year manufacturer-like warranty (365 days from delivery).
+    - Headphones: typically 6-month warranty (around 180 days from delivery).
+    Warranty calculations are based on the delivery_date stored in the system.
+
+Q5: How long do refunds take?
+A5: Once a return has been approved and the product is received and inspected,
+    refunds are usually processed within 5–7 business days to the original payment method.
+
+Q6: Can I cancel my order?
+A6: As this is a demo system, formal cancellation flows are not implemented.
+    However, you can imagine:
+    - Cancellation is possible while the order is still in “processing” status.
+    - Once an order is “shipped” or “delivered”, it can no longer be cancelled but may be eligible for return.
+
+Q7: How can I contact support?
+A7: In a real system, you would contact support via email, phone, or chat.
+    In this demo, the AI assistant is the primary interface for support queries regarding orders, products, returns, refunds, and troubleshooting.
+
+Q8: Are these real orders and products?
+A8: No. This is a demo / educational system.
+    The orders, products, and policies are synthetic examples created to test a Retrieval-Augmented Generation (RAG) assistant for ecommerce support.

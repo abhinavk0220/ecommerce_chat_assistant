@@ -1,0 +1,6 @@
+[
+    {
+        "query": "How do I process a refund?",
+        "expected_intent": "refund"
+    }
+]

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ecommerce Support Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a; /* dark slate */
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .chat-container {
+      width: 100%;
+      max-width: 900px;
+      height: 80vh;
+      background: #020617;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid #1f2937;
+    }
+
+    .chat-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #1f2937;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(to right, #0f172a, #111827);
+    }
+
+    .chat-header-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .chat-header-subtitle {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid #22c55e33;
+      color: #22c55e;
+      background: #16a34a1a;
+    }
+
+    .messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    .message-row {
+      display: flex;
+      margin-bottom: 12px;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .message-bubble {
+      max-width: 70%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+
+    .message-row.user .message-bubble {
+      background: #2563eb;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-row.bot .message-bubble {
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-bottom-left-radius: 4px;
+    }
+
+    .meta-line {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .chat-footer {
+      padding: 10px 12px;
+      border-top: 1px solid #1f2937;
+      background: #020617;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .chat-input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px #2563eb55;
+    }
+
+    .chat-send-btn {
+      padding: 9px 16px;
+      border-radius: 999px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chat-send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .chip-row {
+      padding: 8px 16px;
+      border-bottom: 1px solid #1f2937;
+      background: #020617;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #374151;
+      cursor: pointer;
+      color: #9ca3af;
+      background: #020617;
+    }
+
+    .chip:hover {
+      border-color: #2563eb;
+      color: #e5e7eb;
+    }
+
+    .typing-indicator {
+      font-size: 12px;
+      color: #9ca3af;
+      padding: 0 16px 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">
+      <div>
+        <div class="chat-header-title">Ecommerce Support Assistant</div>
+        <div class="chat-header-subtitle">
+          RAG + Tools + Agentic Workflow • Demo
+        </div>
+      </div>
+      <div class="badge">Backend: FastAPI • Gemini • Chroma</div>
+    </div>
+
+    <div class="chip-row">
+      <button class="chip" data-msg="Where is my order ORD1002?">Track my order</button>
+      <button class="chip" data-msg="Can I return my laptop order ORD1001?">Return eligibility</button>
+      <button class="chip" data-msg="Can I get a refund for my order ORD1002?">Refund help</button>
+      <button class="chip" data-msg="Is my laptop from order ORD1001 still under warranty?">Warranty status</button>
+      <button class="chip" data-msg="Can you suggest some laptops under 60000 for me?">Laptop suggestions</button>
+      <button class="chip" data-msg="My laptop is not turning on, what should I do?">Troubleshooting</button>
+    </div>
+
+    <div id="typing" class="typing-indicator" style="display:none;">
+      Assistant is thinking...
+    </div>
+
+    <div id="messages" class="messages"></div>
+
+    <div class="chat-footer">
+      <input
+        id="input"
+        class="chat-input"
+        placeholder="Ask about orders, refunds, returns, warranty, products, or troubleshooting..."
+      />
+      <button id="sendBtn" class="chat-send-btn">
+        <span>Send</span>
+        <span>➤</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "http://127.0.0.1:8000/chat";
+
+    const messagesEl = document.getElementById("messages");
+    const inputEl = document.getElementById("input");
+    const sendBtn = document.getElementById("sendBtn");
+    const typingEl = document.getElementById("typing");
+
+    function appendMessage(role, text, meta) {
+      const row = document.createElement("div");
+      row.className = "message-row " + role;
+
+      const bubble = document.createElement("div");
+      bubble.className = "message-bubble";
+      bubble.textContent = text;
+      row.appendChild(bubble);
+
+      messagesEl.appendChild(row);
+
+      if (meta) {
+        const metaLine = document.createElement("div");
+        metaLine.className = "meta-line";
+        metaLine.textContent = meta;
+        messagesEl.appendChild(metaLine);
+      }
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function sendMessage(text) {
+      if (!text.trim()) return;
+
+      appendMessage("user", text);
+
+      inputEl.value = "";
+      inputEl.focus();
+      sendBtn.disabled = true;
+      typingEl.style.display = "block";
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ user_message: text }),
+        });
+
+        if (!res.ok) {
+          throw new Error("HTTP " + res.status);
+        }
+
+        const data = await res.json();
+        const meta = `Intent: ${data.intent} • Route: ${data.route}`;
+        appendMessage("bot", data.answer, meta);
+      } catch (err) {
+        appendMessage(
+          "bot",
+          "Sorry, I couldn't reach the backend. Is the FastAPI server running?",
+          "Error: " + err.message
+        );
+      } finally {
+        sendBtn.disabled = false;
+        typingEl.style.display = "none";
+      }
+    }
+
+    sendBtn.addEventListener("click", () => {
+      sendMessage(inputEl.value);
+    });
+
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage(inputEl.value);
+      }
+    });
+
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const msg = chip.getAttribute("data-msg");
+        sendMessage(msg);
+      });
+    });
+
+    // Optional: greet the user
+    appendMessage(
+      "bot",
+      "Hi! I’m your ecommerce assistant. You can ask me about orders, returns, refunds, warranty, product suggestions, and troubleshooting issues.",
+      "Intent: general_rag • Route: greeting"
+    );
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+Shipping Policy – Antigravity Electronics
+
+1. Shipping Regions
+
+For this demo system, we assume shipping within India to serviceable pin codes. 
+Real logistics partners and pin code checks are not implemented, but the assistant can talk about “standard shipping within India”.
+
+2. Delivery Timelines
+
+Typical delivery estimates:
+- Standard shipping: 3–7 business days after the order is shipped.
+- In some cases, remote locations may take slightly longer.
+
+The exact delivery date shown in the order (for example, 2025-12-03) is considered the official delivery date for return and warranty calculations.
+
+3. Shipping Charges
+
+For the purpose of this demo:
+- We can assume “free standard shipping” on most orders.
+- The assistant may mention that shipping is generally free, unless otherwise specified.
+
+4. Order Status Stages
+
+Common order statuses used by our tools:
+- processing: the order has been placed and is being prepared.
+- shipped: the order has left the warehouse and is in transit.
+- delivered: the order has reached the customer (this date is used for return and warranty calculations).
+
+5. Tracking Orders
+
+Customers can ask:
+- “Where is my order ORD1002?”
+- “What is the status of my order ORD1001?”
+
+The system will use the internal order data to report:
+- Current status (processing, shipped, delivered)
+- Expected or actual delivery date
+
+6. Relationship to Return and Warranty
+
+- The delivery_date field from the order is used for:
+  - Calculating the 7-day return window.
+  - Calculating the warranty period (for example, 365 days for laptops, 180 days for headphones in this demo).
+
+This policy is part of the documentation used by the RAG assistant for ecommerce support.

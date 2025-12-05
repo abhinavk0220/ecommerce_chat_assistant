@@ -1,0 +1,33 @@
+{
+  "laptop": {
+    "not_turning_on": [
+      "Check the power cable and ensure it is firmly connected.",
+      "Verify that the wall outlet is working by trying another device.",
+      "Remove the battery (if removable), reconnect power, and hold the power button for 10 seconds.",
+      "If the laptop still does not turn on, contact support."
+    ],
+    "overheating": [
+      "Ensure the laptop is on a hard, flat surface.",
+      "Clean the vents to remove dust.",
+      "Close unnecessary background applications.",
+      "If overheating persists, contact support."
+    ]
+  },
+"headphones": {
+    "no_sound": [
+        "Check Bluetooth connection or audio cable.",
+        "Ensure the volume is not muted on the device.",
+        "Try pairing with another device to isolate the issue."
+    ],
+    "static_noise": [
+        "Ensure the headphones are fully charged.",
+        "Move away from potential sources of interference like Wi-Fi routers.",
+        "Try resetting the headphones as per the user manual."
+    ],
+    "not_powering_on": [
+        "Charge the headphones for at least 30 minutes.",
+        "Check if the charging cable and adapter are working properly.",
+        "If the issue persists, contact support."
+    ]
+}
+}

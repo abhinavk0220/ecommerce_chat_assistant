@@ -1,0 +1,52 @@
+[
+  {
+    "user_id": "U001",
+    "name": "Abhinav Kumar",
+    "email": "abhinav@example.com"
+  },
+  {
+    "user_id": "U002",
+    "name": "Test User",
+    "email": "test@example.com"
+  },
+  {
+    "user_id": "U003",
+    "name": "Sneha Reddy",
+    "email": "sneha.reddy@workmail.com"
+  },
+  {
+    "user_id": "U004",
+    "name": "Rohan Sharma",
+    "email": "rohan.s@gmail.com"
+  },
+  {
+    "user_id": "U005",
+    "name": "Priya Singh",
+    "email": "priya.singh@inbox.net"
+  },
+  {
+    "user_id": "U006",
+    "name": "Arjun Menon",
+    "email": "arjun.m@company.co"
+  },
+  {
+    "user_id": "U007",
+    "name": "Deepa Varma",
+    "email": "deepa_v@myemail.com"
+  },
+  {
+    "user_id": "U008",
+    "name": "Vivek Jain",
+    "email": "vivek.jain@techcorp.org"
+  },
+  {
+    "user_id": "U009",
+    "name": "Kavita Rao",
+    "email": "kavita.rao@mailservice.com"
+  },
+  {
+    "user_id": "U010",
+    "name": "Samir Khan",
+    "email": "samir.k@emailpro.in"
+  }
+]

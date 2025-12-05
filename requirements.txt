@@ -1,0 +1,31 @@
+# Core
+google-generativeai==0.7.2
+python-dotenv==1.0.1
+numpy==1.26.4
+pydantic==2.9.2
+pydantic-settings==2.4.0
+typing-extensions>=4.5.0
+
+# LangChain Core + Ecosystem (Pinned for stability)
+langchain==0.2.12
+langchain-community==0.2.11
+langchain-text-splitters==0.2.2
+langsmith==0.1.79
+
+# Embeddings
+sentence-transformers==2.7.0
+langchain-huggingface==0.1.2
+
+# Vector Store
+chromadb==0.5.3
+
+# Backend
+fastapi==0.111.0
+uvicorn==0.29.0
+
+# Frontend (UI)
+streamlit==1.37.0
+
+# Evaluation
+rouge-score==0.1.2
+scikit-learn==1.5.0

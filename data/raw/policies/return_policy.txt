@@ -1,0 +1,44 @@
+Return Policy – Antigravity Electronics
+
+1. General Return Window
+
+We offer a 7-day return window from the date of delivery for most products. 
+This means:
+- You can request a return within 7 calendar days after the product is marked as delivered.
+- After 7 days, the order is considered outside the return window and is not eligible for return, except in special cases such as serious defects.
+
+2. Conditions for Return
+
+To be eligible for a return:
+- The product should be in good condition, with no physical damage caused by misuse.
+- Wherever possible, the original box, accessories, and invoice should be available.
+- For headphones, hygiene and usage conditions may apply. Excessively used or damaged items may be rejected.
+
+3. Eligible Categories
+
+In this demo store:
+- Laptops: eligible for return within 7 days from delivery, subject to inspection.
+- Headphones: eligible for return within 7 days from delivery, subject to inspection.
+
+4. Non-Returnable Situations
+
+A return request may be rejected in cases such as:
+- The request is raised after the 7-day return window.
+- The product is damaged due to misuse, accidental damage, or unauthorized repair.
+- Missing major accessories or serial number tampering.
+
+5. Return Process
+
+Typical steps:
+1. Customer raises a return request with the order ID (for example, ORD1001).
+2. Basic eligibility is checked based on the delivery date and status.
+3. If eligible, the product is picked up or dropped off as per instructions.
+4. After the product is inspected and approved, refund processing starts.
+
+6. Relationship with Refunds
+
+In our system logic:
+- Refunds are only processed if the order is eligible for return.
+- If an order is outside the 7-day return window, it is not eligible for a refund based on this policy.
+
+Note: This policy is part of a demo ecommerce RAG system, and the timelines align with the tools used in the backend (for example, a 7-day eligibility check based on delivery_date).

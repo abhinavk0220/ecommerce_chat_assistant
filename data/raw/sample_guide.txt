@@ -1,0 +1,19 @@
+Welcome to the Sample Product Guide.
+
+This document explains how to use the sample product, common issues,
+and troubleshooting steps.
+
+Section 1: Setup
+1. Plug in the device.
+2. Press the power button.
+3. Wait until the status light turns green.
+
+Section 2: Troubleshooting
+If the device does not turn on:
+- Check the power cable.
+- Ensure the outlet is working.
+- Hold the power button for 10 seconds.
+
+Section 3: Warranty
+This product comes with a one-year limited warranty covering manufacturing defects.
+Please contact support with your order ID for claims.

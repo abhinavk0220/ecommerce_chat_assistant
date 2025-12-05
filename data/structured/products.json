@@ -1,0 +1,54 @@
+[
+  {
+    "product_id": "LAP123",
+    "name": "ZenBook 14",
+    "category": "laptop",
+    "brand": "Asus",
+    "price": 69990,
+    "currency": "INR",
+    "specs": {
+      "processor": "Intel i5",
+      "ram_gb": 16,
+      "storage_gb": 512,
+      "screen_inches": 14
+    },
+    "tags": ["lightweight", "office", "student"],
+    "rating": 4.5
+  },
+  {
+    "product_id": "LAP200",
+    "name": "ThinkPro 15",
+    "category": "laptop",
+    "brand": "Lenovo",
+    "price": 54990,
+    "currency": "INR",
+    "specs": {
+      "processor": "Intel i5",
+      "ram_gb": 8,
+      "storage_gb": 512,
+      "screen_inches": 15.6
+    },
+    "tags": ["business", "office"],
+    "rating": 4.3
+  },
+  {
+    "product_id": "HPH001",
+    "name": "NoiseCanceller Pro",
+    "category": "headphones",
+    "brand": "AudioX",
+    "price": 3999,
+    "currency": "INR",
+    "tags": ["noise-cancelling", "wireless"],
+    "rating": 4.2
+  },
+  {
+    "product_id": "HPH010",
+    "name": "BassBoost Wireless",
+    "category": "headphones",
+    "brand": "SoundBoom",
+    "price": 2499,
+    "currency": "INR",
+    "tags": ["wireless", "bass"],
+    "rating": 4.0
+  }
+]

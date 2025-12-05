@@ -1,0 +1,45 @@
+Company Overview – Antigravity Electronics
+
+Antigravity Electronics is a demo online electronics store focused on a small but high-quality catalog of devices. 
+We currently specialise in:
+
+- Laptops for students, professionals, and business users
+- Wireless headphones for music, calls, and entertainment
+
+Our primary goal is to make it simple for customers to:
+
+- Discover the right laptop or headphones for their use case
+- Place and track orders online
+- Request returns, refunds, and warranty support when needed
+
+Product categories we focus on:
+
+1. Laptops:
+   - Lightweight laptops for students and remote workers
+   - Business-focused laptops for office and productivity use
+
+2. Headphones:
+   - Wireless noise-cancelling headphones
+   - Budget-friendly wireless headphones with strong bass
+
+Customer support scope:
+
+Our support assistant can help customers with:
+- Order status and tracking
+- Return and refund eligibility
+- Warranty information
+- Basic troubleshooting for devices (for example, “laptop not turning on” or “headphones no sound”)
+- Product comparisons and suggestions based on budget and use case
+
+Order ID format:
+
+Orders in our system follow the format ORD1234, for example:
+- ORD1001
+- ORD1002
+- ORD1003
+
+This format is used throughout our tools and backend system for order lookups.
+
+Demo / educational note:
+
+This store and its data are designed for educational and demo purposes. All orders, products, and policies in this system are synthetic examples to test a Retrieval-Augmented Generation (RAG) assistant for ecommerce support.
