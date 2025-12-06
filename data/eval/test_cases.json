@@ -1,0 +1,83 @@
+[
+  {
+    "id": "policy_return_headphones",
+    "query": "What is your return policy on headphones?",
+    "expected_answer": "Headphones can be returned within the standard return window as long as they are in good condition with original packaging.",
+    "expected_route_prefix": "rag",
+    "expected_source_files": [
+      "return_policy.txt"
+    ]
+  },
+  {
+    "id": "policy_shipping_india",
+    "query": "Do you offer free shipping within India?",
+    "expected_answer": "We offer shipping within India, and free shipping may be available above a certain order value depending on the policy.",
+    "expected_route_prefix": "rag",
+    "expected_source_files": [
+      "shipping_policy.txt"
+    ]
+  },
+  {
+    "id": "company_overview",
+    "query": "What is Antigravity Electronics and what do you do?",
+    "expected_answer": "Antigravity Electronics is a demo online electronics store that focuses on laptops and headphones and provides an AI support assistant.",
+    "expected_route_prefix": "rag",
+    "expected_source_files": [
+      "company_overview.txt"
+    ]
+  },
+  {
+    "id": "faq_support_capabilities",
+    "query": "What kind of support can your assistant provide?",
+    "expected_answer": "The assistant can help with order status, returns, refunds, warranty questions, basic troubleshooting for devices, and product suggestions.",
+    "expected_route_prefix": "rag",
+    "expected_source_files": [
+      "company_overview.txt",
+      "general_faq.txt"
+    ]
+  },
+  {
+    "id": "troubleshooting_laptop_not_turning_on",
+    "query": "My laptop is not turning on. What should I do?",
+    "expected_answer": "Check the power cable, test the wall outlet, hold the power button for some seconds and contact support if it still does not turn on.",
+    "expected_route_prefix": "tool",
+    "expected_source_files": [
+      "sample_guide.txt"
+    ]
+  },
+  {
+    "id": "order_status_ord1002",
+    "query": "Where is my order ORD1002?",
+    "expected_answer": "Order ORD1002 should be reported as shipped with an estimated delivery date based on the orders data.",
+    "expected_route_prefix": "tool:order_status",
+    "expected_source_files": []
+  },
+  {
+    "id": "return_eligibility_ord1001",
+    "query": "Can I return my laptop order ORD1001?",
+    "expected_answer": "The system should check the delivery date and answer whether ORD1001 is still within or outside the 7-day return window.",
+    "expected_route_prefix": "tool:return_eligibility",
+    "expected_source_files": []
+  },
+  {
+    "id": "refund_ord1002",
+    "query": "Am I eligible for a refund on order ORD1002?",
+    "expected_answer": "The assistant should tell if a refund is possible for ORD1002 and roughly when the refund will be processed after a return.",
+    "expected_route_prefix": "tool:refund",
+    "expected_source_files": []
+  },
+  {
+    "id": "product_search_laptops_under_60000",
+    "query": "Suggest some laptops under 60000 for office or college use.",
+    "expected_answer": "The answer should mention at least one laptop under 60000 such as the Lenovo ThinkPro 15 and explain why it is suitable for office or college use.",
+    "expected_route_prefix": "tool+llm:product_search",
+    "expected_source_files": []
+  },
+  {
+    "id": "gaming_setup_question",
+    "query": "I want a budget-friendly gaming setup with laptop, headphones, mouse and keyboard. What do you suggest?",
+    "expected_answer": "The assistant should recommend a combination of gaming laptop, gaming headset, gaming mouse and gaming keyboard from the catalog without inventing new products.",
+    "expected_route_prefix": "tool+llm:product_search",
+    "expected_source_files": []
+  }
+]

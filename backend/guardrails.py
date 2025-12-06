@@ -10,7 +10,7 @@ assistant logic. This helps us:
 2. Block romantic / dating / sexual / pickup-line style queries that are not
    appropriate for a professional ecommerce assistant.
 3. Optionally restrict to ecommerce topics (domain guardrail), but still allow
-   basic chitchat (hi/hello/how are you).
+   basic chitchat (hi/hello/how are you, "oh nice", etc.).
 
 This module is intentionally simple and transparent so that it is easy
 to explain and debug in the project report or viva.
@@ -92,6 +92,7 @@ ECOMMERCE_KEYWORDS = [
     "payment",
     "invoice",
     "product",
+    "products",
     "laptop",
     "headphone",
     "headphones",
@@ -101,6 +102,14 @@ ECOMMERCE_KEYWORDS = [
     "store",
     "company",
     "status",
+    "catalog",
+    "catalogue",
+    "catalog list",
+    "product list",
+    "offer",
+    "offers",
+    "setup",
+    "bundle",
 ]
 
 # Basic chitchat we want to ALLOW (router will handle it later).
@@ -114,6 +123,14 @@ CHITCHAT_KEYWORDS = [
     "good evening",
     "thank you",
     "thanks",
+    "oh nice",
+    "ohh nice",
+    "nice",
+    "cool",
+    "great",
+    "awesome",
+    "ok",
+    "okay",
 ]
 
 

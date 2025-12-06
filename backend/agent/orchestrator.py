@@ -253,14 +253,35 @@ def handle_user_message(user_message: str, today: str | None = None) -> Dict[str
             "router_info": router_info,
         }
 
-    # 5. Product search / recommendations (TOOLS + LLM)
+    # 5. Product search / recommendations (TOOLS + LLM, tag-aware)
     if intent == "product_search":
+        # Infer some tag filters from the user's wording
+        lowered_msg = user_message.lower()
+        required_tags = []
+
+        if "gaming" in lowered_msg or "gamer" in lowered_msg:
+            required_tags.append("gaming")
+        if "wireless" in lowered_msg:
+            required_tags.append("wireless")
+        if "noise cancelling" in lowered_msg or "noise-cancelling" in lowered_msg:
+            required_tags.append("noise-cancelling")
+        if "bass" in lowered_msg:
+            required_tags.append("bass")
+        if "mechanical" in lowered_msg:
+            required_tags.append("mechanical")
+        if "rgb" in lowered_msg:
+            required_tags.append("rgb")
+        if "office" in lowered_msg or "work from home" in lowered_msg:
+            required_tags.append("office")
+        if "student" in lowered_msg or "college" in lowered_msg:
+            required_tags.append("student")
+
         tool_res = search_products_tool.invoke(
             {
                 "category": category,
                 "max_price": max_price,
                 "brand": None,
-                "required_tags": [],
+                "required_tags": required_tags,
             }
         )
         count = tool_res.get("count", 0)
@@ -269,7 +290,8 @@ def handle_user_message(user_message: str, today: str | None = None) -> Dict[str
         if count == 0:
             answer_text = (
                 "I couldn't find products matching those filters. "
-                "You might try adjusting the budget or category."
+                "You might try adjusting the budget, category, or removing some constraints "
+                "(for example, a very low budget plus strict gaming requirements)."
             )
             return {
                 "intent": intent,
@@ -306,12 +328,18 @@ The user asked:
 
 
 Instructions:
-1. Briefly summarize how many matching products we have and the price range.
-2. For each product, give a short, friendly description (who it is good for).
-3. If possible, recommend which option(s) are better for different scenarios
-   (for example, students, office work, budget-conscious users).
-4. Do NOT invent products that are not listed above. Only talk about these products.
-5. Keep the tone clear and concise.
+1. Group products by category where helpful (for example: Laptops, Headphones, Mouse, Keyboards).
+2. Briefly summarize how many matching products we have and the price range.
+3. For each product, give a short, friendly description (who it is good for: students, office work, gamers, budget users, etc.).
+4. If possible, recommend which option(s) are better for different scenarios
+   (for example, gaming setup, office productivity, study).
+5. If the user seems to want a full gaming setup, you may suggest a combination of
+   a gaming laptop + gaming headset + gaming mouse + gaming keyboard from the list,
+   but do NOT invent products that are not listed above.
+6. Do NOT invent products that are not listed above. Only talk about these products.
+7. Use clear formatting with markdown: headings and bullet points.
+
+Keep the tone clear and concise.
 """
 
         try:

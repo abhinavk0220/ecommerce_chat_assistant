@@ -1,0 +1,187 @@
+okay these are the outputs:
+___________________________________________________________________________________________________________
+(myEnv) C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\backend>python retrieval_eval.py
+=== RAG Retrieval Evaluation (Recall@k, Precision@k) ===
+
+--- Case: policy_return_headphones ---
+Query: What is your return policy on headphones?
+Expected source files: ['return_policy.txt']
+C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\backend\rag\vectorstore.py:80: LangChainDeprecationWarning: The class `Chroma` was deprecated in LangChain 0.2.9 and will be removed in 1.0. An updated version of the class exists in the `langchain-chroma package and should be used instead. To use it run `pip install -U `langchain-chroma` and import as `from `langchain_chroma import Chroma``.
+  vectordb = Chroma(
+Retrieved source files: ['general_faq.txt', 'return_policy.txt', 'return_policy.txt']
+Recall@3: 1.00
+Precision@3: 0.50
+
+--- Case: policy_shipping_india ---
+Query: Do you offer free shipping within India?
+Expected source files: ['shipping_policy.txt']
+Retrieved source files: ['shipping_policy.txt', 'shipping_policy.txt', 'general_faq.txt']
+Recall@3: 1.00
+Precision@3: 0.50
+
+--- Case: company_overview ---
+Query: What is Antigravity Electronics and what do you do?
+Expected source files: ['company_overview.txt']
+Retrieved source files: ['company_overview.txt', 'general_faq.txt', 'return_policy.txt']
+Recall@3: 1.00
+Precision@3: 0.33
+
+--- Case: faq_support_capabilities ---
+Query: What kind of support can your assistant provide?
+Expected source files: ['company_overview.txt', 'general_faq.txt']
+Retrieved source files: ['company_overview.txt', 'general_faq.txt', 'company_overview.txt']
+Recall@3: 1.00
+Precision@3: 1.00
+
+--- Case: troubleshooting_laptop_not_turning_on ---
+Query: My laptop is not turning on. What should I do?
+Expected source files: ['sample_guide.txt']
+Retrieved source files: ['sample_guide.txt', 'sample_guide.txt', 'company_overview.txt']
+Recall@3: 1.00
+Precision@3: 0.50
+
+=== Overall Retrieval Scores ===
+Average Recall@k   : 1.00
+Average Precision@k: 0.57
+________________________________________________________________________________________________________
+(myEnv) C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\backend>python generation_eval.py
+=== Answer Quality Evaluation (ROUGE-L, Routing) ===
+
+--- Case: policy_return_headphones ---
+Query: What is your return policy on headphones?
+C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\backend\rag\vectorstore.py:80: LangChainDeprecationWarning: The class `Chroma` was deprecated in LangChain 0.2.9 and will be removed in 1.0. An updated version of the class exists in the `langchain-chroma package and should be used instead. To use it run `pip install -U `langchain-chroma` and import as `from `langchain_chroma import Chroma``.
+  vectordb = Chroma(
+Route: rag | Intent: policy_question
+Answer:
+Headphones are eligible for return within 7 days from the date of delivery [Doc 1][Doc 2]. They are subject to inspection, and hygiene and usage conditions may apply [Doc 1][Doc 2][Doc 3]. Excessively used or damaged items may be rejected [Doc 3].
+
+ROUGE-L -> Precision: 0.12, Recall: 0.25, F1: 0.16
+Route matches expected prefix 'rag': True
+Hallucination flag (simple heuristic): False
+
+--- Case: policy_shipping_india ---
+Query: Do you offer free shipping within India?
+Route: rag | Intent: general_rag
+Answer:
+Yes, we can assume free standard shipping on most orders within India [Doc 1][Doc 2]. The assistant may mention that shipping is generally free unless otherwise specified [Doc 2].
+
+ROUGE-L -> Precision: 0.17, Recall: 0.25, F1: 0.20
+Route matches expected prefix 'rag': True
+Hallucination flag (simple heuristic): False
+
+--- Case: company_overview ---
+Query: What is Antigravity Electronics and what do you do?
+Route: rag | Intent: general_rag
+Answer:
+Antigravity Electronics is a demo online electronics store focused on a small but high-quality catalog of devices [Doc 1]. They currently sell laptops for students, professionals, and business users, as well as wireless headphones, including noise-cancelling and bass-focused models [Doc 2].
+
+ROUGE-L -> Precision: 0.29, Recall: 0.60, F1: 0.39
+Route matches expected prefix 'rag': True
+Hallucination flag (simple heuristic): False
+
+--- Case: faq_support_capabilities ---
+Query: What kind of support can your assistant provide?
+Route: rag | Intent: general_rag
+Answer:
+Our support assistant can help customers with:
+- Order status and tracking [Doc 1]
+- Return and refund eligibility [Doc 1]
+- Warranty information [Doc 1]
+- Basic troubleshooting for devices (e.g., “laptop not turning on” or “headphones no sound”) [Doc 1]
+- Product comparisons and suggestions based on budget and use case [Doc 1]
+
+ROUGE-L -> Precision: 0.16, Recall: 0.50, F1: 0.25
+Route matches expected prefix 'rag': True
+Hallucination flag (simple heuristic): False
+
+--- Case: troubleshooting_laptop_not_turning_on ---
+Query: My laptop is not turning on. What should I do?
+Route: tool:troubleshooting | Intent: troubleshooting
+Answer:
+Here are some troubleshooting steps for your laptop (not turning on):
+1. Check the power cable and ensure it is firmly connected.
+2. Verify that the wall outlet is working by testing another device.
+3. If the battery is removable, remove it, connect the power cable, and hold the power button for 10 seconds.
+4. If the laptop still does not turn on, contact support.
+
+ROUGE-L -> Precision: 0.23, Recall: 0.60, F1: 0.33
+Route matches expected prefix 'tool': True
+Hallucination flag (simple heuristic): False
+
+--- Case: order_status_ord1002 ---
+Query: Where is my order ORD1002?
+Route: tool:order_status | Intent: order_status
+Answer:
+Order ORD1002 has been shipped. Estimated delivery date: 2025-12-03.
+
+ROUGE-L -> Precision: 0.44, Recall: 0.24, F1: 0.31
+Route matches expected prefix 'tool:order_status': True
+Hallucination flag (simple heuristic): False
+
+--- Case: return_eligibility_ord1001 ---
+Query: Can I return my laptop order ORD1001?
+Route: tool:return_eligibility | Intent: return_eligibility
+Answer:
+Order ORD1001 is outside the 7-day return window (delivered 11 day(s) ago).
+
+ROUGE-L -> Precision: 0.50, Recall: 0.30, F1: 0.37
+Route matches expected prefix 'tool:return_eligibility': True
+Hallucination flag (simple heuristic): False
+
+--- Case: refund_ord1002 ---
+Query: Am I eligible for a refund on order ORD1002?
+Route: tool:refund | Intent: refund
+Answer:
+Order ORD1002 is within the 7-day return window (delivered 3 day(s) ago). Since the order is eligible for return, a refund can be issued to the original payment method once the return is completed.
+
+If you initiate a return now, the refund will typically be processed within 5–7 business days after the returned item is received and inspected. Based on today’s date (2025-12-06), you can expect the refund to be completed by around 2025-12-13.
+
+ROUGE-L -> Precision: 0.14, Recall: 0.45, F1: 0.21
+Route matches expected prefix 'tool:refund': True
+Hallucination flag (simple heuristic): False
+
+--- Case: product_search_laptops_under_60000 ---
+Query: Suggest some laptops under 60000 for office or college use.
+Route: tool:product_search | Intent: product_search
+Answer:
+I couldn't find products matching those filters. You might try adjusting the budget, category, or removing some constraints (for example, a very low budget plus strict gaming requirements).
+
+ROUGE-L -> Precision: 0.07, Recall: 0.07, F1: 0.07
+Route matches expected prefix 'tool+llm:product_search': False
+Hallucination flag (simple heuristic): True
+
+--- Case: gaming_setup_question ---
+Query: I want a budget-friendly gaming setup with laptop, headphones, mouse and keyboard. What do you suggest?
+Route: tool+llm:product_search | Intent: product_search
+Answer:
+Certainly! You're looking for a budget-friendly gaming setup. Based on the products available in the catalog, I can help you with the laptop component of your setup.
+
+Please note that I only have laptops in the current list. Unfortunately, I don't have headphones, mice, or keyboards available in the catalog at the moment.  
+
+### Available Laptops for Your Gaming Setup
+
+We have 2 gaming laptops available, with prices ranging from ₹89990 to ₹119990.
+
+*   **Acer NitroX 15 Gaming Laptop**
+    *   **Price:** ₹89990
+    *   **Rating:** 4.6/5
+    *   **Description:** This laptop is an excellent choice for **budget-conscious gamers** who want a solid gaming experience without breaking the bank. It features RGB lighting and a high-refresh rate screen, perfect for immersive gaming.
+*   **Lenovo Legion Strike 16**
+    *   **Price:** ₹119990
+    *   **Rating:** 4.8/5
+    *   **Description:** A powerful option for **serious gamers and creative professionals**. While it offers higher performance, it's less budget-friendly than the Acer NitroX 15.
+
+### Recommendation for a Budget-Friendly Gaming Laptop
+
+For a **budget-friendly gaming setup**, I would suggest the **Acer NitroX 15 Gaming Laptop**. It offers strong gaming features like RGB and a high-refresh display at a more accessible price point (₹89990), making it the better choice for your budget requirements compared to the Lenovo Legion Strike 16.
+
+To complete your setup, you would need to look for a gaming headset, mouse, and keyboard separately as they are not available in this list.
+
+ROUGE-L -> Precision: 0.03, Recall: 0.35, F1: 0.06
+Route matches expected prefix 'tool+llm:product_search': True
+Hallucination flag (simple heuristic): False
+
+=== Overall Answer Quality ===
+Average ROUGE-L F1: 0.24
+Routing accuracy (route prefix match): 90.0%
+Hallucination rate (heuristic): 10.0%

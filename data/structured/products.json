@@ -32,13 +32,48 @@
     "rating": 4.3
   },
   {
+    "product_id": "LAP300",
+    "name": "NitroX 15 Gaming Laptop",
+    "category": "laptop",
+    "brand": "Acer",
+    "price": 89990,
+    "currency": "INR",
+    "specs": {
+      "processor": "Intel i7",
+      "ram_gb": 16,
+      "storage_gb": 1024,
+      "screen_inches": 15.6,
+      "gpu": "RTX 4060"
+    },
+    "tags": ["gaming", "rgb", "high-refresh"],
+    "rating": 4.6
+  },
+  {
+    "product_id": "LAP310",
+    "name": "Legion Strike 16",
+    "category": "laptop",
+    "brand": "Lenovo",
+    "price": 119990,
+    "currency": "INR",
+    "specs": {
+      "processor": "AMD Ryzen 7",
+      "ram_gb": 32,
+      "storage_gb": 1024,
+      "screen_inches": 16,
+      "gpu": "RTX 4070"
+    },
+    "tags": ["gaming", "creator", "high-performance"],
+    "rating": 4.8
+  },
+
+  {
     "product_id": "HPH001",
     "name": "NoiseCanceller Pro",
     "category": "headphones",
     "brand": "AudioX",
     "price": 3999,
     "currency": "INR",
-    "tags": ["noise-cancelling", "wireless"],
+    "tags": ["noise-cancelling", "wireless", "office"],
     "rating": 4.2
   },
   {
@@ -48,7 +83,59 @@
     "brand": "SoundBoom",
     "price": 2499,
     "currency": "INR",
-    "tags": ["wireless", "bass"],
+    "tags": ["wireless", "bass", "budget"],
     "rating": 4.0
+  },
+  {
+    "product_id": "HPH020",
+    "name": "HyperSound GX Gaming Headset",
+    "category": "headphones",
+    "brand": "HyperSound",
+    "price": 4599,
+    "currency": "INR",
+    "tags": ["gaming", "wired", "mic", "surround"],
+    "rating": 4.4
+  },
+
+  {
+    "product_id": "MSE001",
+    "name": "SwiftClick Wireless Mouse",
+    "category": "mouse",
+    "brand": "ClickPro",
+    "price": 899,
+    "currency": "INR",
+    "tags": ["wireless", "office"],
+    "rating": 4.1
+  },
+  {
+    "product_id": "MSE010",
+    "name": "ViperClaw RGB Gaming Mouse",
+    "category": "mouse",
+    "brand": "ViperClaw",
+    "price": 1999,
+    "currency": "INR",
+    "tags": ["gaming", "rgb", "high-dpi"],
+    "rating": 4.5
+  },
+
+  {
+    "product_id": "KBD001",
+    "name": "TypeMaster 104",
+    "category": "keyboard",
+    "brand": "KeyWorks",
+    "price": 1499,
+    "currency": "INR",
+    "tags": ["office", "full-size"],
+    "rating": 4.0
+  },
+  {
+    "product_id": "KBD010",
+    "name": "MechaStrike RGB Gaming Keyboard",
+    "category": "keyboard",
+    "brand": "MechaStrike",
+    "price": 3499,
+    "currency": "INR",
+    "tags": ["gaming", "mechanical", "rgb"],
+    "rating": 4.6
   }
 ]

@@ -1,128 +1,158 @@
-# backend/tools/troubleshooting_tool.py
+# tools/troubleshooting_tool.py
 
 """
-Troubleshooting tool module.
+Simple troubleshooting tool for common issues.
 
-Provides structured troubleshooting steps for common device issues,
-based on a JSON knowledge base in data/structured/troubleshooting.json.
+We support basic, rule-based troubleshooting for:
+- laptops
+- headphones
 
-This tool is useful for queries like:
-- "My laptop is not turning on."
-- "My headphones have no sound."
+The idea:
+- Map the user's free-text "issue" into a normalized issue key.
+- Look up predefined troubleshooting steps.
+- Return a structured JSON object that the orchestrator can convert into
+  a natural language answer.
+
+This is enough to demonstrate tool usage + agentic reasoning.
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
+from langchain.tools import tool
 
-from langchain_core.tools import tool
+# Predefined troubleshooting steps
+TROUBLESHOOTING_DATA: Dict[str, Dict[str, List[str]]] = {
+    "laptop": {
+        "not_turning_on": [
+            "Check the power cable and ensure it is firmly connected.",
+            "Verify that the wall outlet is working by testing another device.",
+            "If the battery is removable, remove it, connect the power cable, and hold the power button for 10 seconds.",
+            "If the laptop still does not turn on, contact support.",
+        ],
+        "overheating": [
+            "Ensure that the laptop vents are not blocked and are free of dust.",
+            "Use the laptop on a hard, flat surface for better airflow.",
+            "Close heavy background applications that might be stressing the CPU or GPU.",
+            "If overheating continues, consider cleaning the fan or contacting support.",
+        ],
+        "not_working_generic": [
+            "Restart the laptop and check if the issue persists.",
+            "Make sure your operating system and drivers are up to date.",
+            "Check if the issue is limited to a specific app or happens everywhere.",
+            "If the problem continues, note down any error messages and contact support.",
+        ],
+    },
+    "headphones": {
+        "no_sound": [
+            "Check the Bluetooth connection or audio cable connection.",
+            "Ensure the volume is not muted on the connected device.",
+            "Try pairing the headphones with another device to isolate the issue.",
+        ],
+        "distorted_sound": [
+            "Reduce the volume slightly to see if the sound becomes clearer.",
+            "Check if the audio source quality is low or heavily compressed.",
+            "Try a different app or media file to confirm.",
+        ],
+        "not_working_generic": [
+            "Check if the headphones are powered on and sufficiently charged.",
+            "Unpair and re-pair the headphones with your device.",
+            "Test the headphones with a different phone or laptop to see if the issue is device-specific.",
+            "If the problem persists, you may need to contact support or explore warranty options.",
+        ],
+    },
+}
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-STRUCTURED_DATA_DIR = PROJECT_ROOT / "data" / "structured"
-TROUBLESHOOTING_PATH = STRUCTURED_DATA_DIR / "troubleshooting.json"
 
-
-def load_troubleshooting_kb() -> Dict[str, Any]:
-    if not TROUBLESHOOTING_PATH.exists():
-        raise FileNotFoundError(f"troubleshooting.json not found at: {TROUBLESHOOTING_PATH}")
-    with open(TROUBLESHOOTING_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, dict):
-        raise ValueError("troubleshooting.json must contain a JSON object at the top level.")
-    return data
-
-
-# def normalize_product_type(product_type: str) -> str:
-    pt = product_type.lower().strip()
-    if "laptop" in pt:
+def _normalize_product_type(product_type: str) -> str:
+    lowered = (product_type or "").lower()
+    if "laptop" in lowered:
         return "laptop"
-    if "headphone" in pt:
+    if "headphone" in lowered or "headset" in lowered:
         return "headphones"
-    if "phone" in pt or "mobile" in pt:
-        return "phone"
-    return pt
-def normalize_product_type(product_type: str) -> str:
-    pt = product_type.lower().strip()
-    if "laptop" in pt:
-        return "laptop"
-    if "headphone" in pt:
-        return "headphones"
-    if "phone" in pt or "mobile" in pt:
-        return "phone"
-    if "device" in pt:
-        # For generic "device", treat as a laptop-like device in this demo
-        return "laptop"
-    return pt
+    # default fallback type
+    return "laptop"
 
 
-def normalize_issue(issue: str) -> str:
-    text = issue.lower()
-    if "not turning on" in text or "won't turn on" in text or "does not turn on" in text or "won't power on" in text:
+def _infer_issue_key(product_type: str, issue: str) -> str | None:
+    lowered = issue.lower()
+
+    # Strong patterns
+    if (
+        "not turning on" in lowered
+        or "won't turn on" in lowered
+        or "does not turn on" in lowered
+        or "doesn't turn on" in lowered
+        or "won't power on" in lowered
+    ):
         return "not_turning_on"
-    if "no sound" in text or "cannot hear" in text or "no audio" in text:
+
+    if "no sound" in lowered or "no audio" in lowered or "cannot hear" in lowered:
         return "no_sound"
-    if "overheating" in text or "too hot" in text:
+
+    if "overheat" in lowered or "too hot" in lowered or "getting hot" in lowered:
         return "overheating"
-    # default: return as-is, might not match the KB
-    return issue.replace(" ", "_").lower()
+
+    # Generic "not working" phrasing
+    if "not working" in lowered or "not working properly" in lowered or "stopped working" in lowered:
+        return "not_working_generic"
+
+    # If nothing matched, return None
+    return None
 
 
 @tool("get_troubleshooting_steps", return_direct=False)
 def get_troubleshooting_steps_tool(product_type: str, issue: str) -> Dict[str, Any]:
     """
-    Retrieve structured troubleshooting steps for a given product type and issue.
+    Tool: get_troubleshooting_steps
 
     Args:
         product_type: e.g. "laptop", "headphones"
-        issue: natural language description, e.g. "not turning on", "no sound"
+        issue: free-text issue description from user
 
     Returns:
-        {
-          "found": bool,
-          "product_type": str,
-          "issue_key": str,
-          "steps": List[str],
-          "message": str,
-        }
+        dict with keys:
+        - found: bool
+        - product_type: normalized product type
+        - issue_key: normalized issue key (if found)
+        - steps: list of steps (if found)
+        - message: human-readable summary
     """
-    kb = load_troubleshooting_kb()
+    norm_type = _normalize_product_type(product_type)
+    issue_key = _infer_issue_key(norm_type, issue)
 
-    norm_product = normalize_product_type(product_type)
-    norm_issue = normalize_issue(issue)
+    data_for_type = TROUBLESHOOTING_DATA.get(norm_type, {})
+    steps = data_for_type.get(issue_key) if issue_key else None
 
-    product_entry = kb.get(norm_product)
-    if product_entry is None:
+    if steps:
+        # Build a friendly message
+        pretty_issue = issue_key.replace("_", " ")
+        lines = [
+            f"Here are some troubleshooting steps for your {norm_type} ({pretty_issue}):"
+        ]
+        for i, step in enumerate(steps, start=1):
+            lines.append(f"{i}. {step}")
+        message = "\n".join(lines)
+
         return {
-            "found": False,
-            "product_type": norm_product,
-            "issue_key": norm_issue,
-            "steps": [],
-            "message": f"No troubleshooting data found for product type '{norm_product}'.",
-        }
-
-    steps: List[str] = product_entry.get(norm_issue, [])
-
-    if not steps:
-        return {
-            "found": False,
-            "product_type": norm_product,
-            "issue_key": norm_issue,
-            "steps": [],
-            "message": f"No troubleshooting steps found for issue '{norm_issue}' on '{norm_product}'.",
-        }
-
-    # Build a human-readable message summarizing the steps
-    lines = [f"Here are some troubleshooting steps for your {norm_product} ({issue}):"]
-    for i, step in enumerate(steps, start=1):
-        lines.append(f"{i}. {step}")
-    message = "\n".join(lines)
-
-    return {
-        "found": True,
-            "product_type": norm_product,
-            "issue_key": norm_issue,
+            "found": True,
+            "product_type": norm_type,
+            "issue_key": issue_key,
             "steps": steps,
             "message": message,
+        }
+
+    # If we didn't find a match, return a structured "not found" response
+    return {
+        "found": False,
+        "product_type": norm_type,
+        "issue_key": None,
+        "steps": [],
+        "message": (
+            f"No troubleshooting steps found for issue '{issue}' on '{norm_type}'. "
+            "You can try describing the problem in more detail, or check if it is related to power, sound, or overheating."
+        ),
     }
+
+
+# C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\backend\tools\product_tool.py

@@ -1,4 +1,4 @@
-# backend/agent/router.py
+# agent/router.py
 
 """
 Simple rule-based router for the ecommerce assistant.
@@ -46,23 +46,37 @@ def extract_max_price(text: str) -> Optional[float]:
 
 
 def detect_category(text: str) -> Optional[str]:
+    """
+    Map natural language mentions to a coarse product category.
+    Extended to support:
+    - laptop
+    - headphones / headset
+    - mouse
+    - keyboard
+    - phone (kept for completeness)
+    """
     lowered = text.lower()
     if "laptop" in lowered or "laptops" in lowered:
         return "laptop"
-    if "headphone" in lowered or "headphones" in lowered:
+    if "headphone" in lowered or "headphones" in lowered or "headset" in lowered:
         return "headphones"
+    if "mouse" in lowered or "mice" in lowered:
+        return "mouse"
+    if "keyboard" in lowered or "key board" in lowered:
+        return "keyboard"
     if "phone" in lowered or "mobile" in lowered or "smartphone" in lowered:
         return "phone"
     return None
 
 
 def is_chitchat(lowered: str) -> bool:
+    # Keep chitchat STRICT: short greetings / thanks etc.
     return any(
         phrase in lowered
         for phrase in [
-            "hi",
+            " hi",        # leading space to avoid matching "this"
             "hello",
-            "hey",
+            " hey",
             "how are you",
             "how r you",
             "who are you",
@@ -73,6 +87,31 @@ def is_chitchat(lowered: str) -> bool:
             "good evening",
         ]
     )
+
+
+def is_troubleshooting_issue(lowered: str) -> bool:
+    """
+    Detect if the message looks like a device/usage issue.
+    We check this BEFORE chitchat so that things like
+    'great, my laptop is not working properly' don't get misrouted.
+    """
+    issue_phrases = [
+        "not turning on",
+        "won't turn on",
+        "does not turn on",
+        "doesn't turn on",
+        "won't power on",
+        "no sound",
+        "not working",
+        "not working properly",
+        "stopped working",
+        "stop working",
+        "broken",
+        "issue with",
+        "problem with",
+        "overheating",
+    ]
+    return any(p in lowered for p in issue_phrases)
 
 
 def detect_intent(user_message: str) -> Dict[str, Any]:
@@ -90,7 +129,19 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
     text = user_message.strip()
     lowered = text.lower()
 
-    # Chitchat first (small talk)
+    # 0) Troubleshooting FIRST (so "not working" doesn't become chitchat/general)
+    if is_troubleshooting_issue(lowered):
+        category = detect_category(text)
+        order_id = extract_order_id(text)
+        max_price = extract_max_price(text)
+        return {
+            "intent": "troubleshooting",
+            "order_id": order_id,
+            "category": category,
+            "max_price": max_price,
+        }
+
+    # 1) Chitchat (small talk)
     if is_chitchat(lowered):
         return {
             "intent": "chitchat",
@@ -99,7 +150,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": None,
         }
 
-    # Simple date query
+    # 2) Simple date query
     if (
         "date today" in lowered
         or "today's date" in lowered
@@ -116,7 +167,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
     category = detect_category(text)
     max_price = extract_max_price(text)
 
-    # 1) Order status
+    # 3) Order status
     if (
         "where is my order" in lowered
         or "track my order" in lowered
@@ -131,7 +182,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": max_price,
         }
 
-    # 2) Policy questions
+    # 4) Policy questions
     if (
         "return policy" in lowered
         or "shipping policy" in lowered
@@ -145,7 +196,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": max_price,
         }
 
-    # 3) Refund
+    # 5) Refund
     if any(
         kw in lowered
         for kw in ["refund", "money back", "get my money", "refund status"]
@@ -157,7 +208,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": max_price,
         }
 
-    # 4) Return / exchange
+    # 6) Return / exchange
     if any(
         kw in lowered
         for kw in ["return", "exchange", "replace", "replacement"]
@@ -169,7 +220,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": max_price,
         }
 
-    # 5) Warranty
+    # 7) Warranty
     if "warranty" in lowered or "guarantee" in lowered:
         return {
             "intent": "warranty_status",
@@ -178,7 +229,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": max_price,
         }
 
-    # 6) Product search / recommendation
+        # 8) Product search / recommendation
     search_verbs = [
         "suggest",
         "recommend",
@@ -210,7 +261,32 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": max_price,
         }
 
-    # Case B: no specific category, but clearly asking about products we sell
+    # Case B: explicit catalogue / what you offer questions (no category)
+    if any(
+        kw in lowered
+        for kw in [
+            "catalog",
+            "catalogue",
+            "product catalog",
+            "product catalogue",
+            "what all you offer",
+            "what all u offer",
+            "what do you offer",
+            "what do u offer",
+            "what all you guys offer",
+            "what all u guys offer",
+            "what all you have",
+            "what all u have",
+        ]
+    ):
+        return {
+            "intent": "product_search",
+            "order_id": order_id,
+            "category": None,  # means "all categories"
+            "max_price": max_price,
+        }
+
+    # Case C: no specific category, but clearly asking about products we sell
     if any(
         kw in lowered
         for kw in [
@@ -231,28 +307,7 @@ def detect_intent(user_message: str) -> Dict[str, Any]:
             "max_price": max_price,
         }
 
-    # 7) Troubleshooting
-    if any(
-        phrase in lowered
-        for phrase in [
-            "not turning on",
-            "won't turn on",
-            "does not turn on",
-            "won't power on",
-            "no sound",
-            "not working",
-            "stopped working",
-            "overheating",
-        ]
-    ):
-        return {
-            "intent": "troubleshooting",
-            "order_id": order_id,
-            "category": category,
-            "max_price": max_price,
-        }
-
-    # 8) Default: general RAG / FAQ
+    # 9) Default: general RAG / FAQ
     return {
         "intent": "general_rag",
         "order_id": order_id,
