@@ -1,220 +1,239 @@
-# # backend/app.py
-
-# from __future__ import annotations
-
-# from fastapi import FastAPI
-# from fastapi.middleware.cors import CORSMiddleware
-# from pydantic import BaseModel
-
-# from agent.orchestrator import handle_user_message
-
-# app = FastAPI(
-#     title="Ecommerce RAG Assistant",
-#     description="RAG + Tools + Agentic workflow for ecommerce support",
-#     version="0.1.0",
-# )
-
-# # CORS so frontend (localhost:5173, 3000, or just file://) can call API
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],  # you can restrict later
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-
-# class ChatRequest(BaseModel):
-#     user_message: str
-#     session_id: str | None = None  # placeholder for future memory support
-
-
-# class ChatResponse(BaseModel):
-#     answer: str
-#     intent: str
-#     route: str
-#     router_info: dict
-#     tool_result: dict | None = None
-#     rag_result: dict | None = None
-
-
-# @app.get("/health")
-# async def health_check():
-#     return {"status": "ok"}
-
-
-# @app.post("/chat", response_model=ChatResponse)
-# async def chat_endpoint(payload: ChatRequest):
-#     """
-#     Main chat endpoint. Takes a user message and returns
-#     the assistant's answer plus some debug metadata.
-#     """
-#     result = handle_user_message(payload.user_message)
-
-#     # result is already a dict with keys:
-#     # intent, answer, route, tool_result, rag_result, router_info
-#     return ChatResponse(
-#         answer=result["answer"],
-#         intent=result["intent"],
-#         route=result["route"],
-#         router_info=result["router_info"],
-#         tool_result=result.get("tool_result"),
-#         rag_result=result.get("rag_result"),
-#     )
-
 # backend/app.py
+
+"""
+FastAPI application with authentication, session management, and agentic orchestration.
+"""
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
-
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 
 from agent.orchestrator import handle_user_message
 from guardrails import apply_guardrails, GuardrailResult
-
+from database.db_manager import db
+from auth.auth_manager import (
+    authenticate_user,
+    create_session_for_user,
+    create_anonymous_session,
+    get_session_user,
+    logout_session
+)
 
 app = FastAPI(
     title="Ecommerce RAG Assistant",
-    description="RAG + Tools + Agentic workflow for ecommerce support",
-    version="0.1.0",
+    description="Agentic RAG + Tools workflow for ecommerce support",
+    version="1.0.0",
 )
 
-# CORS so frontend (localhost / file://) can call API
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # you can restrict later
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# ==================== PYDANTIC MODELS ====================
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    session_id: str | None = None
+    user_id: str | None = None
+    name: str | None = None
+    message: str | None = None
+
+
 class ChatRequest(BaseModel):
     user_message: str
-    session_id: str | None = None  # placeholder for future memory support
+    session_id: str | None = None
 
 
 class ChatResponse(BaseModel):
     answer: str
     intent: str
     route: str
-    router_info: dict
-    tool_result: dict | None = None
-    rag_result: dict | None = None
-
-    # New metadata fields
+    session_id: str
+    tool_calls: list = []
+    iterations: int = 0
+    router_info: dict = {}
     from_cache: bool = False
     guardrail_triggered: bool = False
     guardrail_reason: str | None = None
 
 
+# ==================== ENDPOINTS ====================
+
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "database": "connected"}
 
 
-# ----------------------------
-# Simple in-memory cache
-# ----------------------------
-
-# Key: (session_id or "global", normalized_user_message)
-CacheKey = Tuple[str, str]
-CACHE: Dict[CacheKey, Dict] = {}
-MAX_CACHE_SIZE = 100  # keep it small for demo
-
-
-def make_cache_key(user_message: str, session_id: str | None) -> CacheKey:
-    session = session_id or "global"
-    normalized = " ".join(user_message.strip().lower().split())
-    return (session, normalized)
-
-
-def get_from_cache(key: CacheKey) -> Dict | None:
-    return CACHE.get(key)
-
-
-def set_in_cache(key: CacheKey, value: Dict) -> None:
-    if len(CACHE) >= MAX_CACHE_SIZE:
-        # very simple eviction: remove an arbitrary item
-        try:
-            first_key = next(iter(CACHE))
-            CACHE.pop(first_key, None)
-        except StopIteration:
-            pass
-    CACHE[key] = value
+@app.post("/login", response_model=LoginResponse)
+async def login(payload: LoginRequest):
+    """
+    Authenticate user and create a session.
+    """
+    user = authenticate_user(payload.email, payload.password)
+    
+    if not user:
+        return LoginResponse(
+            success=False,
+            message="Invalid email or password"
+        )
+    
+    # Create session
+    session_id = create_session_for_user(user["user_id"])
+    
+    return LoginResponse(
+        success=True,
+        session_id=session_id,
+        user_id=user["user_id"],
+        name=user["name"],
+        message="Login successful"
+    )
 
 
-# ----------------------------
-# Chat endpoint with guardrails + cache
-# ----------------------------
+@app.post("/logout")
+async def logout(session_id: str = Header(None)):
+    """
+    End a session (logout).
+    """
+    if not session_id:
+        raise HTTPException(status_code=400, detail="No session_id provided")
+    
+    logout_session(session_id)
+    return {"success": True, "message": "Logged out successfully"}
+
+
+@app.post("/create-anonymous-session")
+async def create_anon_session():
+    """
+    Create an anonymous session for users who don't want to log in.
+    """
+    session_id = create_anonymous_session()
+    return {"session_id": session_id}
+
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest):
     """
-    Main chat endpoint. Takes a user message and returns
-    the assistant's answer plus some debug metadata.
-
-    Guardrails are applied FIRST.
-    If allowed, we then:
-      - check cache
-      - if miss, call handle_user_message and populate cache
+    Main chat endpoint with agentic orchestration.
+    
+    Flow:
+    1. Validate/create session
+    2. Apply guardrails
+    3. Load conversation history
+    4. Call agentic orchestrator
+    5. Save conversation
+    6. Return response
     """
     raw_message = payload.user_message
-
-    # 1) Apply guardrails
+    session_id = payload.session_id
+    
+    # Create anonymous session if none provided
+    if not session_id:
+        session_id = create_anonymous_session()
+    
+    # Get user_id from session (if logged in)
+    user_id = get_session_user(session_id)
+    
+    # Apply guardrails
     gr: GuardrailResult = apply_guardrails(raw_message)
     if not gr.allowed:
-        # We DO NOT call the main assistant logic here.
+        # Save blocked message to history
+        db.add_message(
+            session_id=session_id,
+            role="user",
+            content=raw_message,
+            user_id=user_id,
+            intent="guardrail_blocked",
+            route=f"guardrail:{gr.reason}"
+        )
+        db.add_message(
+            session_id=session_id,
+            role="assistant",
+            content=gr.message or "I cannot respond to this request.",
+            user_id=user_id,
+            intent="guardrail_response",
+            route=f"guardrail:{gr.reason}"
+        )
+        
         return ChatResponse(
             answer=gr.message or "I cannot respond to this request.",
             intent="guardrail",
-            route=f"guardrail:{gr.reason or 'blocked'}",
+            route=f"guardrail:{gr.reason}",
+            session_id=session_id,
+            tool_calls=[],
+            iterations=0,
             router_info={},
-            tool_result=None,
-            rag_result=None,
             from_cache=False,
             guardrail_triggered=True,
             guardrail_reason=gr.reason,
         )
-
-    # 2) Build cache key
-    key = make_cache_key(raw_message, payload.session_id)
-
-    # 3) Check cache
-    cached = get_from_cache(key)
-    if cached is not None:
-        # cached is the full result dict from handle_user_message
-        return ChatResponse(
-            answer=cached["answer"],
-            intent=cached["intent"],
-            route=cached["route"],
-            router_info=cached["router_info"],
-            tool_result=cached.get("tool_result"),
-            rag_result=cached.get("rag_result"),
-            from_cache=True,
-            guardrail_triggered=False,
-            guardrail_reason=None,
-        )
-
-    # 4) Cache miss -> call main assistant logic
-    result = handle_user_message(raw_message)
-
-    # Store raw result dict in cache
-    set_in_cache(key, result)
-
-    # 5) Return response (not from cache)
+    
+    # Load conversation history (last 20 messages)
+    conversation_history = db.get_conversation_history(session_id, limit=20)
+    
+    # Save user message
+    db.add_message(
+        session_id=session_id,
+        role="user",
+        content=raw_message,
+        user_id=user_id
+    )
+    
+    # Call agentic orchestrator
+    result = handle_user_message(
+        user_message=raw_message,
+        conversation_history=conversation_history,
+        user_id=user_id,
+        session_id=session_id
+    )
+    
+    # Save assistant response
+    db.add_message(
+        session_id=session_id,
+        role="assistant",
+        content=result["answer"],
+        user_id=user_id,
+        intent=result.get("intent"),
+        route=result.get("route")
+    )
+    
+    # Return response
     return ChatResponse(
         answer=result["answer"],
         intent=result["intent"],
         route=result["route"],
-        router_info=result["router_info"],
-        tool_result=result.get("tool_result"),
-        rag_result=result.get("rag_result"),
+        session_id=session_id,
+        tool_calls=result.get("tool_calls", []),
+        iterations=result.get("iterations", 0),
+        router_info=result.get("router_info", {}),
         from_cache=False,
         guardrail_triggered=False,
         guardrail_reason=None,
     )
 
+
+@app.get("/session/{session_id}/history")
+async def get_session_history(session_id: str, limit: int = 20):
+    """
+    Get conversation history for a session.
+    """
+    history = db.get_conversation_history(session_id, limit=limit)
+    return {"session_id": session_id, "history": history}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

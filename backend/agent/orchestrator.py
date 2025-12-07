@@ -1,472 +1,477 @@
 # backend/agent/orchestrator.py
 
 """
-Orchestrator for the ecommerce assistant.
+Agentic orchestrator using Gemini's native function calling.
 
-Given a user message, we:
-1. Detect intent using the rule-based router.
-2. Route to the appropriate capability:
-   - Tools (orders, products, returns, refunds, warranty, troubleshooting)
-   - RAG (policy/manual-based answers)
-   - Chitchat / date queries
-3. Return a unified response object.
-
-For product search, we use a hybrid pattern:
-- Tools (search_products_tool) to fetch the actual catalog entries.
-- LLM (Gemini via get_llm) to summarize and recommend based on those entries.
+The LLM autonomously decides which tools to call and in what sequence.
+This implements a true agentic workflow with multi-step reasoning.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
+import json
+import os
+import traceback
+
+from dotenv import load_dotenv
+import google.generativeai as genai
 
 from agent.router import detect_intent
+from agent.tool_definitions import GEMINI_TOOL_DEFINITIONS
 from rag.rag_chain import answer_with_rag
+from llm_adapter import get_llm
+
+# Import all tool functions
 from tools.order_tool import get_order_status_tool, find_order_by_id
 from tools.product_tool import search_products_tool
 from tools.returns_tool import check_return_eligibility_tool
 from tools.warranty_tool import check_warranty_status_tool
 from tools.refund_tool import check_refund_possibility_tool
 from tools.troubleshooting_tool import get_troubleshooting_steps_tool
-from llm_adapter import get_llm  # returns google.generativeai.GenerativeModel
+from tools.user_tool import find_orders_by_user_id_tool
 
 
 def get_today_str() -> str:
     return datetime.today().strftime("%Y-%m-%d")
 
 
-def handle_user_message(user_message: str, today: str | None = None) -> Dict[str, Any]:
-    """
-    Main entrypoint for the backend assistant logic.
+# Intents that need user authentication/identification
+PRIVATE_INTENTS = [
+    "order_status",
+    "return_eligibility",
+    "refund",
+    "warranty_status"
+]
 
-    Returns a dict:
-    {
-      "intent": str,
-      "answer": str,
-      "route": str,        # e.g. "tool:order_status" or "rag" or "tool+llm:product_search"
-      "tool_result": Any,  # raw tool output if applicable
-      "rag_result": Any,   # raw rag result if applicable
-      "router_info": {...} # what the router detected
+# Intents that don't need user context
+PUBLIC_INTENTS = [
+    "product_search",
+    "policy_question",
+    "general_rag",
+    "chitchat",
+    "date_query",
+    "troubleshooting"
+]
+
+
+def execute_tool_call(tool_name: str, tool_args: Dict[str, Any], today: str) -> Dict[str, Any]:
+    """
+    Execute a tool call and return the result.
+    Maps Gemini function names to actual tool implementations.
+    """
+    # Add today to relevant tool calls automatically
+    if tool_name in ["check_return_eligibility", "check_refund_possibility", "check_warranty_status"]:
+        if "today" not in tool_args:
+            tool_args["today"] = today
+    
+    tool_map = {
+        "find_orders_by_user_id": find_orders_by_user_id_tool,
+        "get_order_status": get_order_status_tool,
+        "search_products": search_products_tool,
+        "check_return_eligibility": check_return_eligibility_tool,
+        "check_refund_possibility": check_refund_possibility_tool,
+        "check_warranty_status": check_warranty_status_tool,
+        "get_troubleshooting_steps": get_troubleshooting_steps_tool,
     }
+    
+    # Special case: RAG-based policy search
+    if tool_name == "search_policy_docs":
+        query = tool_args.get("query", "")
+        rag_result = answer_with_rag(query, k=3)
+        return {
+            "answer": rag_result.get("answer", ""),
+            "sources": rag_result.get("sources", [])
+        }
+    
+    # Execute the tool
+    tool_func = tool_map.get(tool_name)
+    if not tool_func:
+        return {"error": f"Unknown tool: {tool_name}"}
+    
+    try:
+        result = tool_func.invoke(tool_args)
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def format_history_for_gemini(conversation_history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Convert our DB history format to Gemini's expected format.
+    """
+    formatted = []
+    for msg in conversation_history:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        
+        if role == "user":
+            formatted.append({"role": "user", "parts": [{"text": content}]})
+        elif role == "assistant":
+            formatted.append({"role": "model", "parts": [{"text": content}]})
+    
+    return formatted
+
+
+def clean_tool_args(args_obj) -> Dict[str, Any]:
+    """
+    Helper to convert Google Protobuf maps/lists into standard Python dicts/lists.
+    This fixes the 'RepeatedComposite' serialization error in FastAPI.
+    """
+    cleaned = {}
+    for key, value in args_obj.items():
+        # Check if it looks like a list (Google RepeatedComposite)
+        if hasattr(value, "append") or hasattr(value, "__iter__") and not isinstance(value, str):
+            cleaned[key] = list(value)
+        else:
+            cleaned[key] = value
+    return cleaned
+
+
+def handle_user_message_agentic(
+    user_message: str,
+    conversation_history: List[Dict[str, Any]],
+    user_id: str | None,
+    session_id: str,
+    today: str | None = None
+) -> Dict[str, Any]:
+    """
+    Main agentic orchestrator using Gemini function calling.
+    
+    The LLM autonomously:
+    1. Decides which tools to call
+    2. Chains multiple tool calls
+    3. Synthesizes final answer
     """
     today = today or get_today_str()
-
+    
+    # Quick intent detection (for logging and fallback)
     router_info = detect_intent(user_message)
     intent = router_info["intent"]
-    order_id = router_info.get("order_id")
-    category = router_info.get("category")
-    max_price = router_info.get("max_price")
-
-    # 0. Chitchat (no tools, no RAG needed)
+    
+    # ========== HANDLE CHITCHAT (no agentic loop needed) ==========
     if intent == "chitchat":
         lowered = user_message.strip().lower()
-
+        
         if "how are you" in lowered or "how r you" in lowered:
-            ans = (
-                "I’m doing great and ready to help you with your orders, products, "
-                "and support questions! How can I assist you today?"
-            )
+            ans = "I'm doing great and ready to help you! How can I assist you today?"
         elif "who are you" in lowered:
             ans = (
-                "I’m an AI assistant for Antigravity Electronics, a demo online store "
-                "for laptops and headphones. I can help with orders, returns, refunds, "
-                "warranty, product suggestions, and basic troubleshooting."
+                "I'm an AI assistant for Antigravity Electronics. I can help with "
+                "orders, returns, refunds, warranty, product recommendations, and troubleshooting."
             )
         elif "what can you do" in lowered:
             ans = (
-                "I can help you track orders, check return and refund eligibility, "
-                "look up warranty information, suggest products based on your needs, "
-                "and assist with basic troubleshooting for devices."
+                "I can help you:\n"
+                "• Track orders and check delivery status\n"
+                "• Check return and refund eligibility\n"
+                "• Look up warranty information\n"
+                "• Suggest products based on your needs\n"
+                "• Assist with device troubleshooting\n"
+                "• Answer questions about our policies"
             )
         elif "thank" in lowered:
-            ans = "You’re welcome! If you have any questions about your orders or products, just ask."
+            ans = "You're welcome! Feel free to ask if you need anything else."
         else:
-            ans = "Hi! I’m here to help you with orders, products, returns, refunds, warranty, and troubleshooting."
-
+            ans = "Hi! I'm here to help with orders, products, returns, refunds, and more. What can I do for you?"
+        
         return {
             "intent": intent,
             "answer": ans,
             "route": "builtin:chitchat",
-            "tool_result": None,
-            "rag_result": None,
+            "tool_calls": [],
+            "iterations": 0,
             "router_info": router_info,
         }
-
-    # 0b. Date query
+    
+    # ========== DATE QUERY ==========
     if intent == "date_query":
-        ans = f"Today’s date is {today}."
         return {
             "intent": intent,
-            "answer": ans,
+            "answer": f"Today's date is {today}.",
             "route": "builtin:date",
-            "tool_result": None,
-            "rag_result": None,
+            "tool_calls": [],
+            "iterations": 0,
             "router_info": router_info,
         }
-
-    # 1. Order status
-    if intent == "order_status":
-        if not order_id:
-            ans = (
-                "I can help track your order. "
-                "Please provide your order ID (for example, ORD1001)."
-            )
-            return {
-                "intent": intent,
-                "answer": ans,
-                "route": "tool:order_status",
-                "tool_result": None,
-                "rag_result": None,
-                "router_info": router_info,
-            }
-
-        tool_res = get_order_status_tool.invoke({"order_id": order_id})
-        answer_text = tool_res.get("message", "Here is the status of your order.")
+    
+    # ========== CHECK IF USER AUTHENTICATION NEEDED ==========
+    if intent in PRIVATE_INTENTS and user_id is None:
         return {
             "intent": intent,
-            "answer": answer_text,
-            "route": "tool:order_status",
-            "tool_result": tool_res,
-            "rag_result": None,
+            "answer": (
+                "To help with your order, return, refund, or warranty query, "
+                "I need to identify you. You can either:\n"
+                "1. Log in to your account (top right), OR\n"
+                "2. Provide your User ID (e.g., U001, U002)\n\n"
+                "If you don't know your User ID, you can ask me to look it up by email."
+            ),
+            "route": "auth:user_id_required",
+            "tool_calls": [],
+            "iterations": 0,
             "router_info": router_info,
         }
-
-    # 2. Return eligibility
-    if intent == "return_eligibility":
-        if not order_id:
-            ans = (
-                "To check return eligibility, please share your order ID "
-                "(for example, ORD1001)."
-            )
-            return {
-                "intent": intent,
-                "answer": ans,
-                "route": "tool:return_eligibility",
-                "tool_result": None,
-                "rag_result": None,
-                "router_info": router_info,
-            }
-
-        tool_res = check_return_eligibility_tool.invoke(
-            {
-                "order_id": order_id,
-                "today": today,
-            }
-        )
-        answer_text = tool_res.get("reason", "Here is the return eligibility result.")
+    
+    # ========== AGENTIC LOOP WITH GEMINI FUNCTION CALLING ==========
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Configure Gemini with API key
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    if not GEMINI_API_KEY:
+        # Fallback: try GOOGLE_API_KEY
+        GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+    
+    if not GEMINI_API_KEY:
         return {
             "intent": intent,
-            "answer": answer_text,
-            "route": "tool:return_eligibility",
-            "tool_result": tool_res,
-            "rag_result": None,
+            "answer": (
+                "API key not configured. Please set GEMINI_API_KEY or GOOGLE_API_KEY "
+                "in your .env file."
+            ),
+            "route": "error:no_api_key",
+            "tool_calls": [],
+            "iterations": 0,
             "router_info": router_info,
         }
+    
+    # Configure Gemini
+    genai.configure(api_key=GEMINI_API_KEY)
+    
+    # Configure Gemini with tools
+    model = genai.GenerativeModel(
+        model_name='models/gemini-2.5-flash',
+        tools=[{"function_declarations": GEMINI_TOOL_DEFINITIONS}]
+    )
+    
+    # Build conversation context with user_id awareness
+    user_context = ""
+    if user_id:
+        user_context = f"""
+🔐 IMPORTANT - USER CONTEXT:
+The user is currently logged in as user_id: {user_id}
 
-    # 3. Refund
-    if intent == "refund":
-        if not order_id:
-            ans = (
-                "To check your refund possibility or status, please provide your order ID "
-                "(for example, ORD1001)."
-            )
-            return {
-                "intent": intent,
-                "answer": ans,
-                "route": "tool:refund",
-                "tool_result": None,
-                "rag_result": None,
-                "router_info": router_info,
-            }
+CRITICAL RULES:
+1. When the user asks about "my orders", "my order", "return my laptop", etc., 
+   YOU MUST automatically use the find_orders_by_user_id tool with user_id="{user_id}"
+2. DO NOT ask the user for their user_id - you already have it!
+3. DO NOT say "Please provide your user ID" - you have direct access to it!
+4. Always start by finding their orders using find_orders_by_user_id("{user_id}")
 
-        tool_res = check_refund_possibility_tool.invoke(
-            {
-                "order_id": order_id,
-                "today": today,
-            }
-        )
-
-        reason = tool_res.get("reason", "")
-        timeline = tool_res.get("expected_refund_timeline")
-
-        if timeline:
-            answer_text = reason + "\n\n" + timeline
-        else:
-            answer_text = reason
-
-        return {
-            "intent": intent,
-            "answer": answer_text,
-            "route": "tool:refund",
-            "tool_result": tool_res,
-            "rag_result": None,
-            "router_info": router_info,
-        }
-
-    # 4. Warranty status
-    if intent == "warranty_status":
-        if not order_id:
-            ans = (
-                "To check warranty, please provide your order ID "
-                "(for example, ORD1001). If there are multiple products in the order, "
-                "I will ask you which one."
-            )
-            return {
-                "intent": intent,
-                "answer": ans,
-                "route": "tool:warranty_status",
-                "tool_result": None,
-                "rag_result": None,
-                "router_info": router_info,
-            }
-
-        order = find_order_by_id(order_id)
-        if not order or not order.get("items"):
-            ans = f"I couldn't find products for order {order_id}."
-            return {
-                "intent": intent,
-                "answer": ans,
-                "route": "tool:warranty_status",
-                "tool_result": None,
-                "rag_result": None,
-                "router_info": router_info,
-            }
-
-        # For demo: assume only one product per order, take first
-        product_id = order["items"][0]["product_id"]
-
-        tool_res = check_warranty_status_tool.invoke(
-            {
-                "order_id": order_id,
-                "product_id": product_id,
-                "today": today,
-            }
-        )
-        answer_text = tool_res.get("reason", "Here is the warranty status.")
-        return {
-            "intent": intent,
-            "answer": answer_text,
-            "route": "tool:warranty_status",
-            "tool_result": tool_res,
-            "rag_result": None,
-            "router_info": router_info,
-        }
-
-    # 5. Product search / recommendations (TOOLS + LLM, tag-aware)
-    if intent == "product_search":
-        # Infer some tag filters from the user's wording
-        lowered_msg = user_message.lower()
-        required_tags = []
-
-        if "gaming" in lowered_msg or "gamer" in lowered_msg:
-            required_tags.append("gaming")
-        if "wireless" in lowered_msg:
-            required_tags.append("wireless")
-        if "noise cancelling" in lowered_msg or "noise-cancelling" in lowered_msg:
-            required_tags.append("noise-cancelling")
-        if "bass" in lowered_msg:
-            required_tags.append("bass")
-        if "mechanical" in lowered_msg:
-            required_tags.append("mechanical")
-        if "rgb" in lowered_msg:
-            required_tags.append("rgb")
-        if "office" in lowered_msg or "work from home" in lowered_msg:
-            required_tags.append("office")
-        if "student" in lowered_msg or "college" in lowered_msg:
-            required_tags.append("student")
-
-        tool_res = search_products_tool.invoke(
-            {
-                "category": category,
-                "max_price": max_price,
-                "brand": None,
-                "required_tags": required_tags,
-            }
-        )
-        count = tool_res.get("count", 0)
-        products = tool_res.get("products", [])
-
-        if count == 0:
-            answer_text = (
-                "I couldn't find products matching those filters. "
-                "You might try adjusting the budget, category, or removing some constraints "
-                "(for example, a very low budget plus strict gaming requirements)."
-            )
-            return {
-                "intent": intent,
-                "answer": answer_text,
-                "route": "tool:product_search",
-                "tool_result": tool_res,
-                "rag_result": None,
-                "router_info": router_info,
-            }
-
-        # Convert structured products into a text context for the LLM
-        context_lines = []
-        for p in products:
-            tags = ", ".join(p.get("tags", []))
-            context_lines.append(
-                f"- id: {p['product_id']}, name: {p['name']}, brand: {p['brand']}, "
-                f"category: {p['category']}, price: ₹{p['price']}, "
-                f"rating: {p.get('rating', 'N/A')}, tags: {tags}"
-            )
-        context_text = "\n".join(context_lines)
-        user_query = user_message.strip()
-
-        llm = get_llm()
-
-        prompt = f"""
-You are an ecommerce assistant.
-
-Here is the list of products retrieved from the catalog based on the user's filters:
-
-{context_text}
-
-The user asked:
-\"\"\"{user_query}\"\"\"
-
-
-Instructions:
-1. Group products by category where helpful (for example: Laptops, Headphones, Mouse, Keyboards).
-2. Briefly summarize how many matching products we have and the price range.
-3. For each product, give a short, friendly description (who it is good for: students, office work, gamers, budget users, etc.).
-4. If possible, recommend which option(s) are better for different scenarios
-   (for example, gaming setup, office productivity, study).
-5. If the user seems to want a full gaming setup, you may suggest a combination of
-   a gaming laptop + gaming headset + gaming mouse + gaming keyboard from the list,
-   but do NOT invent products that are not listed above.
-6. Do NOT invent products that are not listed above. Only talk about these products.
-7. Use clear formatting with markdown: headings and bullet points.
-
-Keep the tone clear and concise.
+Examples:
+- User: "Show me my orders" → Immediately call find_orders_by_user_id("{user_id}")
+- User: "I want to return my laptop" → Call find_orders_by_user_id("{user_id}") first
+- User: "Check my refund status" → Call find_orders_by_user_id("{user_id}") first
 """
+    else:
+        user_context = f"""
+🔓 USER CONTEXT:
+The user is NOT logged in (anonymous session).
 
-        try:
-            resp = llm.generate_content(prompt)
-            answer_text = getattr(resp, "text", str(resp))
-            route = "tool+llm:product_search"
-        except Exception:
-            # Fallback: if LLM fails for some reason, show simple list.
-            lines = ["Here are some options for you:"]
-            for p in products:
-                lines.append(
-                    f"- {p['name']} ({p['brand']}) - ₹{p['price']} [{p['category']}]"
+For personalized queries (orders, returns, refunds, warranty):
+- Politely ask them to either log in OR provide their user_id manually
+- Example: "To check your orders, please log in or provide your user ID (e.g., U001)"
+"""
+    
+    system_prompt = f"""You are an intelligent e-commerce support assistant for Antigravity Electronics.
+
+{user_context}
+
+Current context:
+- Today's date: {today}
+- Session ID: {session_id}
+
+Your capabilities:
+1. Track orders and shipments
+2. Check return/refund eligibility
+3. Verify warranty status
+4. Recommend products
+5. Troubleshoot device issues
+6. Answer policy questions
+
+Guidelines:
+- Use the available tools to get accurate, real-time information
+- Chain multiple tool calls when needed (e.g., find user orders → check return eligibility)
+- Be concise but helpful and friendly
+- If the user is logged in, USE THEIR USER_ID automatically - don't ask for it!
+- For complex issues beyond your tools, suggest escalation to support team
+
+Available tools: {', '.join([t['name'] for t in GEMINI_TOOL_DEFINITIONS])}
+"""
+    
+    # Format history
+    formatted_history = format_history_for_gemini(conversation_history)
+    
+    # Agentic loop (max 10 iterations to prevent infinite loops)
+    tool_calls_log = []
+    
+    # Initialize tool_result to safe default
+    tool_result = None
+
+    try:
+        # Start chat with history
+        chat = model.start_chat(history=formatted_history)
+        
+        # Send initial user message with system context
+        full_user_message = f"{system_prompt}\n\nUser question: {user_message}"
+        response = chat.send_message(full_user_message)
+        
+        for iteration in range(10):
+            # Better error handling for response
+            if not response.candidates:
+                print("[Agent Error] No candidates in response")
+                break
+            
+            candidate = response.candidates[0]
+            if not candidate.content or not candidate.content.parts:
+                print("[Agent Error] No content parts in candidate")
+                break
+            
+            first_part = candidate.content.parts[0]
+            
+            # Check if model wants to call a function
+            if hasattr(first_part, 'function_call') and first_part.function_call:
+                function_call = first_part.function_call
+                tool_name = function_call.name
+                
+                # CLEAN THE ARGS: Convert from Protobuf Map to Python Dict
+                # This fixes the "RepeatedComposite" serialization error
+                tool_args = clean_tool_args(function_call.args)
+                
+                # Log the tool call
+                tool_calls_log.append({
+                    "tool": tool_name,
+                    "args": tool_args
+                })
+                
+                print(f"[Agent] Calling tool: {tool_name} with args: {tool_args}")
+                
+                # Execute the tool
+                tool_result = execute_tool_call(tool_name, tool_args, today)
+                
+                print(f"[Agent] Tool result: {tool_result}")
+                
+                # Send function response back to continue the conversation
+                response = chat.send_message(
+                    genai.protos.Content(
+                        parts=[
+                            genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=tool_name,
+                                    response={"result": tool_result}
+                                )
+                            )
+                        ]
+                    )
                 )
-            lines.append("")
-            lines.append("(Note: LLM-based explanation failed, showing raw list instead.)")
-            answer_text = "\n".join(lines)
-            route = "tool:product_search_fallback"
-
-        return {
-            "intent": intent,
-            "answer": answer_text,
-            "route": route,
-            "tool_result": tool_res,
-            "rag_result": None,
-            "router_info": router_info,
-        }
-
-    # 6. Troubleshooting: use structured tool first, then optionally RAG
-    if intent == "troubleshooting":
-        product_type = category or "device"
-        issue_text = user_message
-
-        tool_res = get_troubleshooting_steps_tool.invoke(
-            {
-                "product_type": product_type,
-                "issue": issue_text,
-            }
-        )
-
-        if tool_res.get("found", False):
-            answer_text = tool_res.get("message", "Here are some troubleshooting steps.")
+                
+                # Continue loop - the model will process the result
+                continue
+                
+            elif hasattr(first_part, 'text') and first_part.text:
+                # Model has final answer
+                final_answer = first_part.text
+                
+                return {
+                    "intent": intent,
+                    "answer": final_answer,
+                    "route": "gemini:agentic_function_calling",
+                    "tool_calls": tool_calls_log,
+                    "iterations": iteration + 1,
+                    "router_info": router_info,
+                }
+            else:
+                print(f"[Agent Error] Unexpected part type: {type(first_part)}")
+                break
+        
+        # Max iterations reached or error
+        if tool_calls_log:
+            # If we called tools but didn't get a final answer, return the last tool result
+            if isinstance(tool_result, dict) and "message" in tool_result:
+                fallback_answer = tool_result["message"]
+            else:
+                fallback_answer = (
+                    "I gathered some information but encountered an issue generating "
+                    "the final response. Please try rephrasing your question."
+                )
+            
             return {
                 "intent": intent,
-                "answer": answer_text,
-                "route": "tool:troubleshooting",
-                "tool_result": tool_res,
-                "rag_result": None,
+                "answer": fallback_answer,
+                "route": "gemini:max_iterations_with_tools",
+                "tool_calls": tool_calls_log,
+                "iterations": 10,
                 "router_info": router_info,
             }
         else:
-            rag_res = answer_with_rag(user_message, k=3)
-            answer_text = rag_res.get("answer", "I generated an answer based on the documentation.")
-            return {
-                "intent": intent,
-                "answer": answer_text,
-                "route": "rag:troubleshooting_fallback",
-                "tool_result": tool_res,
-                "rag_result": rag_res,
-                "router_info": router_info,
-            }
+            # No tools called, fall back
+            return handle_user_message_fallback(
+                user_message, user_id, today, router_info, intent
+            )
+    
+    except Exception as e:
+        import traceback
+        print(f"[Agent Error] {str(e)}")
+        print(traceback.format_exc())
+        
+        # If we got tool results before the error, try to use them
+        if tool_calls_log and isinstance(tool_result, dict):
+            if "message" in tool_result:
+                return {
+                    "intent": intent,
+                    "answer": tool_result["message"],
+                    "route": "gemini:error_with_partial_results",
+                    "tool_calls": tool_calls_log,
+                    "iterations": len(tool_calls_log),
+                    "router_info": router_info,
+                }
+        
+        # Fallback to non-agentic handling
+        return handle_user_message_fallback(
+            user_message, user_id, today, router_info, intent
+        )
 
-    # 7. Policy questions, general FAQ → RAG with LLM fallback
-    if intent in ("policy_question", "general_rag"):
-        rag_res = answer_with_rag(user_message, k=3)
-        answer_text = (rag_res.get("answer") or "").strip()
 
-        # If RAG is clearly empty or "not sure", fall back to a generic LLM answer
-        if (not answer_text) or (
-            "not sure based on the available information" in answer_text.lower()
-        ):
-            llm = get_llm()
-            fallback_prompt = f"""
-You are an AI assistant for Antigravity Electronics, a demo online store that sells laptops and headphones.
-
-The user asked:
-\"\"\"{user_message}\"\"\".
-
-- If the question is about the store (company, what we sell, what we do), answer in general terms:
-  say that we are an online electronics store focusing on laptops and headphones.
-- If it is a general small question, you can answer normally.
-- If the user asks for dating advice, pickup lines, romantic or sexual content,
-  politely refuse and explain that you are only designed for professional support queries.
-- Do NOT invent specific facts about real customers, real payments, or real companies.
-- Do NOT talk about specific real brands unless they were mentioned by the user or are part of the known catalog.
-- Today’s date is {today}.
-
-Answer briefly and clearly.
-"""
-
-            try:
-                resp = llm.generate_content(fallback_prompt)
-                answer_text = getattr(resp, "text", str(resp))
-                route = "llm:fallback"
-            except Exception:
-                answer_text = (
-                    "I’m not sure how to answer that in detail, but I’m here to help "
-                    "with orders, products, returns, refunds, warranty, and troubleshooting."
-                )
-                route = "llm:fallback_error"
-
-            return {
-                "intent": intent,
-                "answer": answer_text,
-                "route": route,
-                "tool_result": None,
-                "rag_result": rag_res,
-                "router_info": router_info,
-            }
-
-        # Normal RAG success path
-        return {
-            "intent": intent,
-            "answer": answer_text or "I generated an answer based on the documentation.",
-            "route": "rag",
-            "tool_result": None,
-            "rag_result": rag_res,
-            "router_info": router_info,
-        }
-
-    # Fallback (should rarely happen)
+def handle_user_message_fallback(
+    user_message: str,
+    user_id: str | None,
+    today: str,
+    router_info: Dict[str, Any],
+    intent: str
+) -> Dict[str, Any]:
+    """
+    Fallback handler if agentic loop fails.
+    Uses the old rule-based routing.
+    """
+    # Simple RAG fallback
     rag_res = answer_with_rag(user_message, k=3)
-    answer_text = rag_res.get("answer", "I generated an answer based on the documentation.")
+    answer_text = rag_res.get("answer", "I'm having trouble answering that. Please try rephrasing.")
+    
     return {
         "intent": intent,
         "answer": answer_text,
-        "route": "rag",
-        "tool_result": None,
-        "rag_result": rag_res,
+        "route": "fallback:rag",
+        "tool_calls": [],
+        "iterations": 0,
         "router_info": router_info,
+        "rag_result": rag_res,
     }
+
+
+# Alias for backward compatibility
+def handle_user_message(
+    user_message: str,
+    conversation_history: List[Dict[str, Any]] = None,
+    user_id: str | None = None,
+    session_id: str = "default",
+    today: str | None = None
+) -> Dict[str, Any]:
+    """
+    Wrapper for agentic handler.
+    """
+    conversation_history = conversation_history or []
+    return handle_user_message_agentic(
+        user_message, conversation_history, user_id, session_id, today
+    )

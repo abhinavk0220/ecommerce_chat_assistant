@@ -12,14 +12,11 @@ The idea:
 - Look up predefined troubleshooting steps.
 - Return a structured JSON object that the orchestrator can convert into
   a natural language answer.
-
-This is enough to demonstrate tool usage + agentic reasoning.
 """
 
 from __future__ import annotations
 
 from typing import Dict, Any, List
-from langchain.tools import tool
 
 # Predefined troubleshooting steps
 TROUBLESHOOTING_DATA: Dict[str, Dict[str, List[str]]] = {
@@ -77,82 +74,115 @@ def _normalize_product_type(product_type: str) -> str:
 def _infer_issue_key(product_type: str, issue: str) -> str | None:
     lowered = issue.lower()
 
-    # Strong patterns
+    # --- MATCHING LOGIC ---
+
+    # 1. Power / Not Turning On
     if (
         "not turning on" in lowered
         or "won't turn on" in lowered
         or "does not turn on" in lowered
         or "doesn't turn on" in lowered
         or "won't power on" in lowered
+        or "dead" in lowered
+        or "no power" in lowered
     ):
         return "not_turning_on"
 
-    if "no sound" in lowered or "no audio" in lowered or "cannot hear" in lowered:
+    # 2. Sound / Audio Issues
+    if (
+        "no sound" in lowered 
+        or "no audio" in lowered 
+        or "cannot hear" in lowered
+        or "silent" in lowered
+    ):
         return "no_sound"
 
-    if "overheat" in lowered or "too hot" in lowered or "getting hot" in lowered:
+    # 3. Overheating / Heat (EXPANDED THIS SECTION)
+    if (
+        "overheat" in lowered 
+        or "too hot" in lowered 
+        or "getting hot" in lowered
+        or "heating" in lowered   # Added "heating"
+        or "heat" in lowered      # Added "heat"
+        or "hot" in lowered       # Added generic "hot"
+    ):
         return "overheating"
 
-    # Generic "not working" phrasing
-    if "not working" in lowered or "not working properly" in lowered or "stopped working" in lowered:
+    # 4. Generic "not working" phrases
+    if (
+        "not working" in lowered 
+        or "not working properly" in lowered 
+        or "stopped working" in lowered
+        or "broken" in lowered
+    ):
         return "not_working_generic"
 
     # If nothing matched, return None
     return None
 
 
-@tool("get_troubleshooting_steps", return_direct=False)
-def get_troubleshooting_steps_tool(product_type: str, issue: str) -> Dict[str, Any]:
+class GetTroubleshootingStepsTool:
     """
-    Tool: get_troubleshooting_steps
-
-    Args:
-        product_type: e.g. "laptop", "headphones"
-        issue: free-text issue description from user
-
-    Returns:
-        dict with keys:
-        - found: bool
-        - product_type: normalized product type
-        - issue_key: normalized issue key (if found)
-        - steps: list of steps (if found)
-        - message: human-readable summary
+    Simple tool class for getting troubleshooting steps.
     """
-    norm_type = _normalize_product_type(product_type)
-    issue_key = _infer_issue_key(norm_type, issue)
-
-    data_for_type = TROUBLESHOOTING_DATA.get(norm_type, {})
-    steps = data_for_type.get(issue_key) if issue_key else None
-
-    if steps:
-        # Build a friendly message
-        pretty_issue = issue_key.replace("_", " ")
-        lines = [
-            f"Here are some troubleshooting steps for your {norm_type} ({pretty_issue}):"
-        ]
-        for i, step in enumerate(steps, start=1):
-            lines.append(f"{i}. {step}")
-        message = "\n".join(lines)
-
+    def __init__(self):
+        self.name = "get_troubleshooting_steps"
+        self.description = "Get troubleshooting steps for common device issues"
+    
+    def invoke(self, input_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Tool: get_troubleshooting_steps
+        
+        Args:
+            input_dict: Dict with 'product_type' and 'issue' keys
+        
+        Returns:
+            dict with keys:
+            - found: bool
+            - product_type: normalized product type
+            - issue_key: normalized issue key (if found)
+            - steps: list of steps (if found)
+            - message: human-readable summary
+        """
+        product_type = input_dict.get("product_type", "laptop")
+        issue = input_dict.get("issue", "")
+        
+        norm_type = _normalize_product_type(product_type)
+        issue_key = _infer_issue_key(norm_type, issue)
+        
+        data_for_type = TROUBLESHOOTING_DATA.get(norm_type, {})
+        steps = data_for_type.get(issue_key) if issue_key else None
+        
+        if steps:
+            # Build a friendly message
+            pretty_issue = issue_key.replace("_", " ")
+            lines = [
+                f"Here are some troubleshooting steps for your {norm_type} ({pretty_issue}):"
+            ]
+            for i, step in enumerate(steps, start=1):
+                lines.append(f"{i}. {step}")
+            message = "\n".join(lines)
+            
+            return {
+                "found": True,
+                "product_type": norm_type,
+                "issue_key": issue_key,
+                "steps": steps,
+                "message": message,
+            }
+        
+        # If we didn't find a match, return a structured "not found" response
         return {
-            "found": True,
+            "found": False,
             "product_type": norm_type,
-            "issue_key": issue_key,
-            "steps": steps,
-            "message": message,
+            "issue_key": None,
+            "steps": [],
+            "message": (
+                f"No troubleshooting steps found for issue '{issue}' on '{norm_type}'. "
+                "You can try describing the problem in more detail, or check if it is related to power, sound, or overheating."
+            ),
         }
 
-    # If we didn't find a match, return a structured "not found" response
-    return {
-        "found": False,
-        "product_type": norm_type,
-        "issue_key": None,
-        "steps": [],
-        "message": (
-            f"No troubleshooting steps found for issue '{issue}' on '{norm_type}'. "
-            "You can try describing the problem in more detail, or check if it is related to power, sound, or overheating."
-        ),
-    }
 
-
-# C:\Users\User\Desktop\ABHINAV KUMAR\CAPESTONE\ANTIGRAVITY\RAG-Assistant-Project\backend\tools\product_tool.py
+# Create instance
+get_troubleshooting_steps_tool = GetTroubleshootingStepsTool()

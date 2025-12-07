@@ -7,7 +7,7 @@ import google.generativeai as genai
 # Load environment variables from .env
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def get_llm(provider="gemini", model_name="models/gemini-2.5-flash"):
     """
