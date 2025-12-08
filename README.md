@@ -1,6 +1,6 @@
 # 📚 **Complete System Architecture & Technical Deep Dive**
 
-This is your **preparation guide** with all technical details!
+
 
 ---
 
