@@ -1,0 +1,26 @@
+RUN THIS COMMAND IN YOUR CMD:
+git clone https://github.com/abhinavk0220/ecommerce_chat_assistant.git
+____________________________________________________________________________________________
+ONCE THE FOLDER IS CREATED:
+1)go to the root directory 
+__________________________________________
+ACTIVATE THE VIRTUAL ENVIRONMENT:
+2)use the command:
+__________________________________________
+myEnv\Scripts\activate
+__________________________________________
+3)install the requirements from the requirements file 
+4)use the command :
+__________________________________________ 
+pip install requirements.txt
+
+_____________________________________________
+GO INSIDE BACKEND FILE AND START THE BACKEND SERVER
+5)use the command :
+__________________________________________
+uvicorn app:app --reload
+__________________________________________
+NOW GO INSIDE THE FRONTEND FILE AND SIMPLY OPEN INDEX.HTML IN YOUR BROWSER
+__________________________________________
+
+YOU ARE GOOD TO GO

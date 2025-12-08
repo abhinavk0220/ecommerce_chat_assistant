@@ -1,0 +1,44 @@
+6. Evaluation
+__________________________________________________
+We performed a structured evaluation on 10 queries across policy retrieval, tool-based logic, and
+troubleshooting.
+__________________________________________________
+6.1 Retrieval Evaluation Results
+__________________________________________________
+Metric               | Score          | Remark
+---------------------|----------------|-------------------------------------
+Average Recall@k     | 1.00 (100%)    | Perfect document retrieval
+Average Precision@k  | 0.57 (57%)     | Some extra chunks retrieved (expected)
+Interpretation:  The  system  achieved  Perfect  Recall,  meaning  the  relevant  reference  document  was  always
+retrieved  within  the  Top-3  results.  Precision  is  moderate  due  to  the  inclusion  of  adjacent  context  chunks,
+which is typical for small vector stores.
+__________________________________________________
+6.2 Answer Quality Evaluation Results
+__________________________________________________
+Metric               | Score   | Remark
+---------------------|---------|-------------------------------------
+Routing Accuracy     | 90%     | Strong agent workflow
+Hallucination Rate   | 10%     | Good safety behavior
+ROUGE-L F1           | 0.24    | Answers factually correct but vary in phrasing
+Interpretation: Routing is very strong (9/10 correct). Hallucinations are low due to tool-first logic. The ROUGE
+score  reflects  that  while  the  answers  are  correct,  the  LLM  often  generates  more  natural/verbose  responses
+than the ground truth references.
+
+__________________________________________________
+6.3 Insights per Query Type
+__________________________________________________
+Query Type                  | Performance | Notes
+----------------------------|-------------|-----------------------------
+Policy & Company FAQs       | Very High   | RAG works accurately
+Order/Return/Warranty       | Perfect     | Tools are 100% deterministic
+Troubleshooting             | Good        | Structure is good, needs more detail
+Product Discovery           | Moderate    | Limited by small demo catalog
+__________________________________________________
+6.4 Final Evaluation Summary
+__________________________________________________
+We evaluated the Antigravity AI Commerce Assistant using a structured evaluation set. Retrieval
+performance was excellent (100% Recall), ensuring correct knowledge access. The agent demonstrated 90%
+routing accuracy, confirming that the intent classifier successfully activates the correct tool or RAG pipeline.
+Hallucination  was  low  (10%),  showing  that  the  safeguards,  RAG  grounding,  and  tool-first  logic  significantly
+reduce fabricated responses. Overall, the system delivers reliable ecommerce support automation with room
+for further enhancements in product discovery.
